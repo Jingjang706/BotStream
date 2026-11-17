@@ -9,7 +9,7 @@ The Vercel adapter stores account data in Upstash Redis and uses Ably to deliver
 ### 1. Create the hosted services
 
 1. Create an Upstash Redis database in a region close to the Vercel function region. Copy its REST URL and REST token.
-2. Create an Ably app and an API key with publish and token-request capability. Keep the complete key secret; it belongs only in Vercel environment variables.
+2. Create an Ably app and an API key whose allowed capability includes **publish** and **subscribe**. Keep the complete key secret; it belongs only in Vercel environment variables.
 3. Use a Vercel Pro project for commercial/client hosting. Vercel's free Hobby plan is restricted to personal and non-commercial use.
 
 ### 2. Import the repository
