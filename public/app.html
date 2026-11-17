@@ -9,7 +9,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Instrument Sa
 main{max-width:720px;margin:0 auto}h1{font-size:30px;margin:0 0 18px}h2{font-size:20px;margin:0 0 10px}
 section{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:20px;margin-bottom:16px}
 label{display:block;font-weight:600;margin:12px 0 5px}
-input,textarea{width:100%;font:inherit;color:inherit;background:transparent;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+input,textarea{width:100%;font:inherit;color:inherit;background:transparent;border:1px solid var(--line);border-radius:10px;padding:10px 12px}input[type=checkbox]{width:auto;accent-color:var(--acc)}textarea{resize:vertical;min-height:76px}
 button{font-weight:600;font-size:16px;font-family:inherit;background:var(--acc);color:#fff;border:0;border-radius:999px;padding:10px 20px;cursor:pointer;margin:12px 8px 0 0}
 button.alt{background:transparent;color:var(--ink);border:2px solid var(--ink);padding:6px 14px;margin:0}
 .link{display:flex;gap:8px;align-items:center;margin:8px 0}.link code{flex:1;overflow:auto;white-space:nowrap;background:var(--bg);padding:8px 10px;border-radius:8px;font-size:13px}
@@ -34,6 +34,33 @@ button.alt{background:transparent;color:var(--ink);border:2px solid var(--ink);p
   <section><h2>Your links</h2><div id="links"></div>
     <p class="mut">In OBS: add a Browser Source, paste an overlay link, and set the size to your canvas (for example 1920 by 1080).</p></section>
 
+
+  <section><h2>Official creator website</h2>
+    <p class="mut">Build a public home for your brand, links and content. Anyone can view this page, so only publish details and links you want public.</p>
+    <div class="grid">
+      <div><label for="siteTitle">Website display name</label><input id="siteTitle" maxlength="60" placeholder="Your creator name"></div>
+      <div><label for="siteTagline">Headline / tagline</label><input id="siteTagline" maxlength="140" placeholder="Creator · Gamer · Tech"></div>
+      <div><label for="siteLocation">Location / region</label><input id="siteLocation" maxlength="80" placeholder="Cambodia"></div>
+      <div><label for="siteTheme">Accent color (hex)</label><input id="siteTheme" maxlength="7" placeholder="#f05b78"></div>
+      <div><label for="siteAvatar">Profile image URL</label><input id="siteAvatar" type="url" placeholder="https://..."></div>
+      <div><label for="siteCover">Banner image URL</label><input id="siteCover" type="url" placeholder="https://..."></div>
+      <div><label for="siteEmail">Public business email</label><input id="siteEmail" type="email" placeholder="you@example.com"></div>
+      <div><label for="siteTelegram">Telegram contact link</label><input id="siteTelegram" type="url" placeholder="https://t.me/yourname"></div>
+      <div><label for="siteSchedule">Streaming schedule</label><input id="siteSchedule" maxlength="240" placeholder="Mon–Fri · 8 PM Cambodia time"></div>
+      <div><label for="siteLiveUrl">Live stream URL</label><input id="siteLiveUrl" type="url" placeholder="https://youtube.com/..."></div>
+    </div>
+    <label for="siteBio">About / creator introduction</label><textarea id="siteBio" rows="4" maxlength="1800" placeholder="Tell your audience who you are, what you create and why it matters."></textarea>
+    <label><input id="siteLive" type="checkbox"> I am live now (manual status)</label>
+    <p class="mut">The LIVE badge is manual. Set your stream URL above; automatic platform live detection is not enabled yet.</p>
+    <label for="siteSocials">Social channels — one per line: platform | URL</label><textarea id="siteSocials" placeholder="YouTube | https://youtube.com/@yourname&#10;TikTok | https://tiktok.com/@yourname"></textarea>
+    <label for="siteVideos">Featured videos / projects — one per line: title | description | URL</label><textarea id="siteVideos" placeholder="Latest stream | Watch the latest episode | https://youtu.be/..."></textarea>
+    <label for="siteArticles">Articles / updates — one per line: title | excerpt | URL</label><textarea id="siteArticles" placeholder="Staying safe online | A quick guide for the community | https://..."></textarea>
+    <label for="siteCommunities">Community links — one per line: name | description | URL</label><textarea id="siteCommunities" placeholder="Discord | Join the community | https://discord.gg/..."></textarea>
+    <label for="sitePartners">Partners — one per line: name | URL</label><textarea id="sitePartners" placeholder="Partner brand | https://example.com"></textarea>
+    <button onclick="saveProfile()">Save public website</button> <span class="mut" id="profileStatus"></span>
+    <div class="link"><code id="creatorUrl"></code><button class="alt" onclick="copy('creatorUrl')">Copy website link</button></div>
+    <p class="mut"><a id="previewCreator" href="#" target="_blank" rel="noopener">Preview your public creator website ↗</a></p>
+  </section>
   <section><h2>Live controls</h2><p class="mut">Works from your phone while you stream.</p>
     <button onclick="act('test')">Test alert</button><button onclick="act('skip')">Skip alert</button><button onclick="act('spin')">Test spin</button>
     <button onclick="raffle('draw')">Draw raffle winner</button><button class="alt" onclick="raffle('clear')">Clear raffle</button> <span id="rn" class="mut"></span>
@@ -75,6 +102,7 @@ let S = localStorage.getItem('session'), me, qr;
 const api = (path, body) => fetch(path, { method: body ? 'POST' : 'GET', headers: { Authorization: 'Bearer ' + S, ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body && JSON.stringify(body) }).then(r => r.json());
 const money = t => t.currency === 'KHR' ? '៛' + t.amount.toLocaleString() : '$' + t.amount;
 const copy = id => navigator.clipboard.writeText($(id).textContent);
+const linesFor = (items, keys) => (items || []).map(item => keys.map(key => item[key] || '').join(' | ')).join('\\n');
 const post = (path, body) => fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json());
 
 async function auth(kind) {
@@ -95,13 +123,34 @@ async function load() {
   if (me.error) { localStorage.removeItem('session'); S = null; return; }
   $('auth').hidden = true; $('dash').hidden = false;
   const o = location.origin, t = me.alertToken, ov = w => o + '/overlay?w=' + w + '&token=' + t;
-  const L = [['Tip page (share with viewers)', o + '/pay/' + me.slug], ['Alerts overlay', ov('alerts')], ['Spin and raffle wheel overlay', ov('wheel')], ['Goal bar overlay', ov('goal')], ['Top donors overlay', ov('top')], ['Subathon timer overlay', ov('timer')], ['Poll overlay', ov('poll')], ['Prediction overlay', ov('predict')], ['YouTube chat overlay', ov('chat')]];
+  const L = [['Tip page (share with viewers)', o + '/pay/' + me.slug], ['Official creator website', o + '/creator/' + me.slug], ['Alerts overlay', ov('alerts')], ['Spin and raffle wheel overlay', ov('wheel')], ['Goal bar overlay', ov('goal')], ['Top donors overlay', ov('top')], ['Subathon timer overlay', ov('timer')], ['Poll overlay', ov('poll')], ['Prediction overlay', ov('predict')], ['YouTube chat overlay', ov('chat')]];
   $('links').textContent = '';
   L.forEach(([name, url], i) => {
     const d = document.createElement('div'); d.innerHTML = '<div class="mut"></div><div class="link"><code id="l' + i + '"></code><button class="alt">Copy</button></div>';
     d.firstChild.textContent = name; d.querySelector('code').textContent = url; d.querySelector('button').onclick = () => copy('l' + i); $('links').appendChild(d);
   });
   $('nh').textContent = o + '/api/notify/' + me.notifyToken;
+
+  const profile = me.profile || {};
+  $('siteTitle').value = profile.title || me.name;
+  $('siteTagline').value = profile.tagline || '';
+  $('siteLocation').value = profile.location || 'Cambodia';
+  $('siteTheme').value = profile.theme || '#f05b78';
+  $('siteAvatar').value = profile.avatarUrl || '';
+  $('siteCover').value = profile.coverUrl || '';
+  $('siteEmail').value = profile.contactEmail || '';
+  $('siteTelegram').value = profile.contactTelegram || '';
+  $('siteSchedule').value = profile.schedule || '';
+  $('siteLiveUrl').value = profile.liveUrl || '';
+  $('siteBio').value = profile.bio || '';
+  $('siteLive').checked = !!profile.isLive;
+  $('siteSocials').value = linesFor(profile.socials, ['title', 'url']);
+  $('siteVideos').value = linesFor(profile.videos, ['title', 'description', 'url']);
+  $('siteArticles').value = linesFor(profile.articles, ['title', 'excerpt', 'url']);
+  $('siteCommunities').value = linesFor(profile.communities, ['title', 'description', 'url']);
+  $('sitePartners').value = linesFor(profile.partners, ['title', 'url']);
+  $('creatorUrl').textContent = o + '/creator/' + me.slug;
+  $('previewCreator').href = o + '/creator/' + me.slug;
   const c = me.cfg; $('dn').value = me.name; $('gt').value = me.goal.title; $('gg').value = me.goal.target;
   $('sm').value = c.spinMin; $('ss').value = c.scareMin; $('tp').value = c.timerPerUsd; $('mm').value = c.mediaMin; $('tc').value = c.tgChat; $('yv').value = c.ytVideo; $('ws').value = me.wheel.join(', '); $('pp').value = c.pointsPerUsd; $('dh').value = c.discordHook || ''; $('rd').value = me.redeems.map(r => r.title + ' | ' + r.cost + ' | ' + r.kind).join('\n');
   $('rn').textContent = me.raffle + ' entries';
@@ -119,6 +168,29 @@ async function saveSettings() {
     redeems: $('rd').value.split('\n').map(l => l.split('|').map(s => s.trim())).filter(a => a[0]).map(a => ({ title: a[0], cost: a[1], kind: a[2] })) };
   if (qr) b.khqr = qr;
   const d = await api('/api/settings', b); $('se').textContent = d.ok ? 'Saved.' : 'Could not save. The QR image may be too large.'; load();
+}
+
+function parseProfileRows(id, keys) {
+  return $(id).value.split(/\\r?\\n/).map(line => line.split('|').map(value => value.trim()))
+    .filter(parts => parts.some(Boolean)).slice(0, 12)
+    .map(parts => Object.fromEntries(keys.map((key, index) => [key, parts[index] || ''])));
+}
+async function saveProfile() {
+  const profile = {
+    title: $('siteTitle').value, tagline: $('siteTagline').value, location: $('siteLocation').value,
+    theme: $('siteTheme').value, avatarUrl: $('siteAvatar').value, coverUrl: $('siteCover').value,
+    contactEmail: $('siteEmail').value, contactTelegram: $('siteTelegram').value,
+    schedule: $('siteSchedule').value, liveUrl: $('siteLiveUrl').value, bio: $('siteBio').value,
+    isLive: $('siteLive').checked,
+    socials: parseProfileRows('siteSocials', ['title', 'url']),
+    videos: parseProfileRows('siteVideos', ['title', 'description', 'url']),
+    articles: parseProfileRows('siteArticles', ['title', 'excerpt', 'url']),
+    communities: parseProfileRows('siteCommunities', ['title', 'description', 'url']),
+    partners: parseProfileRows('sitePartners', ['title', 'url'])
+  };
+  const result = await api('/api/settings', { profile });
+  $('profileStatus').textContent = result.ok ? 'Website saved. Your public page is updated.' : (result.error || 'Could not save website settings.');
+  if (result.ok) await load();
 }
 const act = p => api('/api/' + p, {});
 async function raffle(a) { const d = await api('/api/raffle', { action: a }); $('rn').textContent = d.error || (a === 'clear' ? '0 entries' : d.entries + ' entries'); }
