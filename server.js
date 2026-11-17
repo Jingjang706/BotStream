@@ -1,4 +1,4 @@
-// LiveTip KH server. No npm install needed. Run: node server.js  (Node 18+)
+// BotStream / LiveTip KH. Local: node server.js. Vercel: api/index.js with shared Redis storage.
 // Owner mode env: OWNER_PASSWORD (turns it on), OWNER_SLUG, ALERT_TOKEN, NOTIFY_TOKEN, LANDING=1
 // Optional env: PORT, DB_FILE, ADMIN_KEY, TELEGRAM_BOT_TOKEN, GOOGLE_TTS_KEY, YOUTUBE_API_KEY
 const http = require('http'), fs = require('fs'), path = require('path'), crypto = require('crypto');
@@ -256,8 +256,14 @@ function ensureOwner() {
 async function app(req, res) {
   res.setHeader('X-Content-Type-Options', 'nosniff'); res.setHeader('Referrer-Policy', 'no-referrer');
   const url = new URL(req.url, 'http://x'), p = url.pathname, m = req.method, q = url.searchParams;
-  const raw = m === 'POST' ? await rawBody(req) : '';
-  let b = {}; try { b = JSON.parse(raw); } catch {}
+  let raw = '';
+  if (m === 'POST') {
+    if (req.body !== undefined) raw = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
+    else raw = await rawBody(req);
+  }
+  let b = {};
+  if (req.body && typeof req.body === 'object' && !Buffer.isBuffer(req.body)) b = req.body;
+  else { try { b = JSON.parse(raw); } catch {} }
 
   if (p === '/healthz') { res.writeHead(200); return res.end('ok'); }
   if (p === '/api/config') return json(res, { single: SINGLE });
