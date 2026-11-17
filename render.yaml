@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: livetip
+    runtime: node
+    plan: starter          # a persistent disk needs a paid plan
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /healthz
+    disk:
+      name: data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: DB_FILE
+        value: /var/data/data.json
+      - key: OWNER_SLUG
+        value: me
+      - key: OWNER_PASSWORD
+        sync: false        # you type this in the Render dashboard
+      - key: ALERT_TOKEN
+        sync: false
+      - key: NOTIFY_TOKEN
+        sync: false

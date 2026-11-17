@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Send a tip</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Khmer:wght@400;700&family=Instrument+Sans:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f3f1fa;--card:#fff;--ink:#1e1b3a;--mut:#5d5a7a;--line:#d9d5ec;--acc:#ff4d6d}
+@media (prefers-color-scheme:dark){:root{--bg:#14122a;--card:#1d1a3a;--ink:#f1eefc;--mut:#a9a5c9;--line:#312d5a}}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.5 "Instrument Sans","Noto Sans Khmer",system-ui,sans-serif;display:grid;place-items:start center;padding:24px 16px}
+main{width:100%;max-width:440px;background:var(--card);border:1px solid var(--line);border-radius:22px;padding:26px}
+h1{font-size:28px;margin:0 0 4px}p{color:var(--mut);margin:4px 0 16px}
+label{display:block;font-weight:600;margin:14px 0 6px}
+input,select,textarea{width:100%;font:inherit;color:inherit;background:transparent;border:1px solid var(--line);border-radius:12px;padding:11px 12px}
+.row{display:flex;gap:10px}.row input{flex:1}.row select{width:96px}
+button{margin-top:20px;width:100%;font-weight:600;font-size:17px;font-family:inherit;background:var(--acc);color:#fff;border:0;border-radius:999px;padding:13px;cursor:pointer}
+img{width:100%;border-radius:14px;margin-top:12px}.err{color:var(--acc);margin-top:10px}#po button{margin:6px 0 0;background:transparent;color:var(--ink);border:2px solid var(--line);text-align:left;padding:10px 16px}
+:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+</style></head>
+<body><main>
+<h1 id="h">Send a tip</h1>
+<div id="poll" hidden><h2 id="pq" style="font-size:19px;margin:0 0 8px"></h2><div id="po"></div></div><p>Fill this in, then scan the QR with ABA or any Bakong bank app. Your tip will appear on stream.</p>
+<form id="f" onsubmit="return go(event)">
+  <label for="n">Your name</label><input id="n" maxlength="30" placeholder="Sokha">
+  <label for="a">Amount</label><div class="row"><input id="a" type="number" min="0.01" step="any" required><select id="c"><option>USD</option><option>KHR</option></select></div>
+  <label for="m">Message (read aloud)</label><textarea id="m" rows="3" maxlength="150"></textarea>
+  <label for="v">YouTube link to play on stream (optional)</label><input id="v" type="url" placeholder="https://youtu.be/...">
+  <p id="vn" style="font-size:14px;margin:6px 0 0"></p>
+  <button>Show QR to pay</button>
+</form>
+<div id="done" hidden><p id="note"></p><img id="qr" alt="KHQR code"><div class="err" id="noqr" hidden>This creator hasn’t added a KHQR code yet.</div></div>
+<div class="err" id="e"></div>
+</main>
+<script>
+const slug = location.pathname.split('/')[2], $ = id => document.getElementById(id);
+let info = {};
+fetch('/api/public/' + slug).then(r => r.json()).then(d => {
+  info = d; if (!d.name) { $('e').textContent = 'Creator not found.'; return; }
+  $('h').textContent = 'Tip ' + d.name; $('vn').textContent = 'Media share starts at $' + d.mediaMin + '.';
+  if (d.poll && d.poll.open) { $('poll').hidden = false; $('pq').textContent = d.poll.q; d.poll.options.forEach((o, i) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = o.t; b.onclick = async () => { const r = await fetch('/api/vote/' + slug, { method: 'POST', body: JSON.stringify({ i }) }); const j = await r.json(); $('po').textContent = j.ok ? 'Thanks for voting!' : j.error; }; $('po').appendChild(b); }); }
+});
+async function go(ev) {
+  ev.preventDefault();
+  const amount = +$('a').value, currency = $('c').value;
+  const r = await fetch('/api/pay/' + slug, { method: 'POST', body: JSON.stringify({ name: $('n').value.trim() || 'Anonymous', amount, currency, message: $('m').value, videoUrl: $('v').value.trim() }) });
+  if (!r.ok) { $('e').textContent = (await r.json()).error; return false; }
+  $('f').hidden = true; $('done').hidden = false;
+  $('note').textContent = 'Pay exactly ' + (currency === 'KHR' ? '៛' + amount.toLocaleString() : '$' + amount) + ' so your message is matched.';
+  if (info.khqr) $('qr').src = info.khqr; else { $('qr').hidden = true; $('noqr').hidden = false; }
+  return false;
+}
+</script></body></html>

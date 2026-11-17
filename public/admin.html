@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Admin</title>
+<style>body{font:16px/1.5 system-ui,sans-serif;max-width:720px;margin:0 auto;padding:20px 16px;background:#f3f1fa;color:#1e1b3a}
+@media (prefers-color-scheme:dark){body{background:#14122a;color:#f1eefc}}
+table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:8px;border-bottom:1px solid #8884}input,button{font:inherit;padding:8px 12px;margin:4px 4px 4px 0}</style></head>
+<body><h1>Admin</h1><p>Set the ADMIN_KEY environment variable on the server, then enter it here.</p>
+<input id="k" type="password" placeholder="Admin key"><button onclick="go()">Load users</button><p id="e"></p>
+<table id="t" hidden><thead><tr><th>Username</th><th>Created</th><th>Tips</th><th>Raised (USD)</th><th></th></tr></thead><tbody id="b"></tbody></table>
+<script>
+const $ = id => document.getElementById(id);
+async function go() {
+  const r = await fetch('/api/admin/users', { headers: { 'x-admin-key': $('k').value } });
+  if (!r.ok) { $('e').textContent = 'Wrong key, or ADMIN_KEY is not set.'; return; }
+  $('e').textContent = ''; $('t').hidden = false; $('b').textContent = '';
+  (await r.json()).forEach(u => {
+    const tr = document.createElement('tr');
+    [u.slug, new Date(u.created).toLocaleDateString(), u.tips, u.raised].forEach(v => { const td = document.createElement('td'); td.textContent = v; tr.appendChild(td); });
+    const td = document.createElement('td'), b = document.createElement('button'); b.textContent = 'Delete';
+    b.onclick = async () => { if (confirm('Delete ' + u.slug + ' and all their data?')) { await fetch('/api/admin/delete', { method: 'POST', headers: { 'x-admin-key': $('k').value }, body: JSON.stringify({ slug: u.slug }) }); go(); } };
+    td.appendChild(b); tr.appendChild(td); $('b').appendChild(tr);
+  });
+}
+</script></body></html>

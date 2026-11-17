@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Khmer:wght@400;700&family=Instrument+Sans:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f3f1fa;--card:#fff;--ink:#1e1b3a;--mut:#5d5a7a;--line:#d9d5ec;--acc:#ff4d6d}
+@media (prefers-color-scheme:dark){:root{--bg:#14122a;--card:#1d1a3a;--ink:#f1eefc;--mut:#a9a5c9;--line:#312d5a}}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Instrument Sans","Noto Sans Khmer",system-ui,sans-serif;padding:20px 16px 60px}
+main{max-width:720px;margin:0 auto}h1{font-size:30px;margin:0 0 18px}h2{font-size:20px;margin:0 0 10px}
+section{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:20px;margin-bottom:16px}
+label{display:block;font-weight:600;margin:12px 0 5px}
+input{width:100%;font:inherit;color:inherit;background:transparent;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+button{font-weight:600;font-size:16px;font-family:inherit;background:var(--acc);color:#fff;border:0;border-radius:999px;padding:10px 20px;cursor:pointer;margin:12px 8px 0 0}
+button.alt{background:transparent;color:var(--ink);border:2px solid var(--ink);padding:6px 14px;margin:0}
+.link{display:flex;gap:8px;align-items:center;margin:8px 0}.link code{flex:1;overflow:auto;white-space:nowrap;background:var(--bg);padding:8px 10px;border-radius:8px;font-size:13px}
+.mut{color:var(--mut);font-size:14px}.err{color:var(--acc)}li{margin:4px 0}img{max-width:180px;border-radius:10px;display:block;margin-top:8px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}.warn{border:2px solid var(--acc)}
+:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+</style></head>
+<body><main>
+<h1>Creator dashboard</h1>
+
+<section id="auth"><h2 id="ah">Log in or create an account</h2>
+  <label for="u">Username</label><input id="u" autocomplete="username"><label for="p">Password</label><input id="p" type="password" autocomplete="current-password">
+  <button onclick="auth('login')">Log in</button><button class="alt" id="regbtn" onclick="auth('register')">Create account</button>
+  <p class="mut" id="forgot"><a href="#" onclick="$('rs').hidden=false;return false">Forgot your password?</a></p>
+  <div class="err" id="ae"></div>
+  <div id="rs" hidden><label for="rc">Recovery code (shown when you created the account)</label><input id="rc"><label for="np">New password</label><input id="np" type="password"><button onclick="reset()">Set new password</button></div>
+</section>
+
+<section id="rec" class="warn" hidden><h2>Save your recovery code</h2><p>This is the only way to reset your password. It is shown once.</p><div class="link"><code id="rcode"></code></div><button onclick="$('rec').hidden=true">I saved it</button></section>
+
+<div id="dash" hidden>
+  <section><h2>Your links</h2><div id="links"></div>
+    <p class="mut">In OBS: add a Browser Source, paste an overlay link, and set the size to your canvas (for example 1920 by 1080).</p></section>
+
+  <section><h2>Live controls</h2><p class="mut">Works from your phone while you stream.</p>
+    <button onclick="act('test')">Test alert</button><button onclick="act('skip')">Skip alert</button><button onclick="act('spin')">Test spin</button>
+    <button onclick="raffle('draw')">Draw raffle winner</button><button class="alt" onclick="raffle('clear')">Clear raffle</button> <span id="rn" class="mut"></span>
+    <label for="tm">Subathon timer (minutes)</label><input id="tm" type="number" min="1" placeholder="60">
+    <button onclick="timer(+$('tm').value)">Start timer</button><button class="alt" onclick="timer(0)">Stop timer</button>
+    <button class="alt" onclick="announce()">Tell Telegram I’m live</button> <span id="lm" class="mut"></span></section>
+
+  <section><h2>Poll</h2>
+    <label for="pq">Question</label><input id="pq" maxlength="80"><label for="po">Options, separated by commas</label><input id="po" placeholder="Game A, Game B, Game C">
+    <button onclick="poll('new')">Start poll</button><button class="alt" onclick="poll('close')">Close</button> <button class="alt" onclick="poll('clear')">Clear</button> <span id="pm" class="err"></span></section>
+
+  <section><h2>Settings</h2>
+    <div class="grid"><div><label for="dn">Display name</label><input id="dn" maxlength="30"></div><div></div>
+    <div><label for="gt">Goal title</label><input id="gt" maxlength="40"></div><div><label for="gg">Goal amount (USD)</label><input id="gg" type="number" min="1"></div>
+    <div><label for="sm">Spin the wheel at (USD, 0 = off)</label><input id="sm" type="number" min="0"></div><div><label for="ss">Jumpscare at (USD, 0 = off)</label><input id="ss" type="number" min="0"></div>
+    <div><label for="tp">Timer minutes added per $1</label><input id="tp" type="number" min="0" step="any"></div><div><label for="mm">Media share from (USD)</label><input id="mm" type="number" min="0" step="any"></div>
+    <div><label for="tc">Telegram chat ID</label><input id="tc"></div><div><label for="yv">YouTube live video ID</label><input id="yv" maxlength="11"></div></div>
+    <label for="ws">Wheel slices, separated by commas</label><input id="ws">
+    <label for="qr">Your KHQR image</label><input id="qr" type="file" accept="image/*"><img id="qp" alt="" hidden>
+    <button onclick="saveSettings()">Save settings</button> <span id="se" class="mut"></span>
+    <p class="mut" id="sv"></p></section>
+
+  <section><h2>Connect your bank notifications</h2><button class="alt" onclick="backup()" style="float:right">Download backup</button>
+    <p class="mut">Each time your bank sends a payment notification, send its text to this address. See the README for phone setup.</p>
+    <div class="link"><code id="nh"></code><button class="alt" onclick="copy('nh')">Copy</button></div></section>
+  <section><h2>Recent tips</h2><ul id="tips"></ul></section>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let S = localStorage.getItem('session'), me, qr;
+const api = (path, body) => fetch(path, { method: body ? 'POST' : 'GET', headers: { Authorization: 'Bearer ' + S }, body: body && JSON.stringify(body) }).then(r => r.json());
+const money = t => t.currency === 'KHR' ? '៛' + t.amount.toLocaleString() : '$' + t.amount;
+const copy = id => navigator.clipboard.writeText($(id).textContent);
+const post = (path, body) => fetch(path, { method: 'POST', body: JSON.stringify(body) }).then(r => r.json());
+
+async function auth(kind) {
+  const d = await post('/api/' + kind, { slug: $('u').value, password: $('p').value });
+  if (d.error) { $('ae').textContent = d.error; return; }
+  S = d.session; localStorage.setItem('session', S);
+  if (d.recovery) { $('rec').hidden = false; $('rcode').textContent = d.recovery; }
+  load();
+}
+async function reset() {
+  const d = await post('/api/reset', { slug: $('u').value, recovery: $('rc').value.trim(), password: $('np').value });
+  if (d.error) { $('ae').textContent = d.error; return; }
+  S = d.session; localStorage.setItem('session', S); load();
+}
+async function load() {
+  if (!S) return;
+  me = await api('/api/me');
+  if (me.error) { localStorage.removeItem('session'); S = null; return; }
+  $('auth').hidden = true; $('dash').hidden = false;
+  const o = location.origin, t = me.alertToken, ov = w => o + '/overlay?w=' + w + '&token=' + t;
+  const L = [['Tip page (share with viewers)', o + '/pay/' + me.slug], ['Alerts overlay', ov('alerts')], ['Spin and raffle wheel overlay', ov('wheel')], ['Goal bar overlay', ov('goal')], ['Top donors overlay', ov('top')], ['Subathon timer overlay', ov('timer')], ['Poll overlay', ov('poll')], ['YouTube chat overlay', ov('chat')]];
+  $('links').textContent = '';
+  L.forEach(([name, url], i) => {
+    const d = document.createElement('div'); d.innerHTML = '<div class="mut"></div><div class="link"><code id="l' + i + '"></code><button class="alt">Copy</button></div>';
+    d.firstChild.textContent = name; d.querySelector('code').textContent = url; d.querySelector('button').onclick = () => copy('l' + i); $('links').appendChild(d);
+  });
+  $('nh').textContent = o + '/api/notify/' + me.notifyToken;
+  const c = me.cfg; $('dn').value = me.name; $('gt').value = me.goal.title; $('gg').value = me.goal.target;
+  $('sm').value = c.spinMin; $('ss').value = c.scareMin; $('tp').value = c.timerPerUsd; $('mm').value = c.mediaMin; $('tc').value = c.tgChat; $('yv').value = c.ytVideo; $('ws').value = me.wheel.join(', ');
+  $('rn').textContent = me.raffle + ' entries';
+  $('sv').textContent = 'Server features: Telegram ' + (me.tgReady ? 'ready' : 'not set up') + ', YouTube chat ' + (me.ytReady ? 'ready' : 'not set up') + '.';
+  if (me.khqr) { $('qp').src = me.khqr; $('qp').hidden = false; }
+  $('tips').textContent = '';
+  me.tips.forEach(t => { const li = document.createElement('li'); li.textContent = t.name + ' · ' + money(t) + (t.message ? ' · ' + t.message : ''); $('tips').appendChild(li); });
+  if (!me.tips.length) $('tips').textContent = 'No tips yet. Send a test alert to try your overlay.';
+}
+$('qr').onchange = e => { const f = e.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => { qr = r.result; $('qp').src = qr; $('qp').hidden = false; }; r.readAsDataURL(f); };
+async function saveSettings() {
+  const n = id => +$(id).value;
+  const b = { name: $('dn').value, goal: { title: $('gt').value, target: n('gg') }, wheel: $('ws').value.split(','),
+    cfg: { spinMin: n('sm'), scareMin: n('ss'), timerPerUsd: n('tp'), mediaMin: n('mm'), tgChat: $('tc').value, ytVideo: $('yv').value } };
+  if (qr) b.khqr = qr;
+  const d = await api('/api/settings', b); $('se').textContent = d.ok ? 'Saved.' : 'Could not save. The QR image may be too large.'; load();
+}
+const act = p => api('/api/' + p, {});
+async function raffle(a) { const d = await api('/api/raffle', { action: a }); $('rn').textContent = d.error || (a === 'clear' ? '0 entries' : d.entries + ' entries'); }
+async function timer(m) { await api('/api/timer', { minutes: m }); }
+async function poll(a) { const d = await api('/api/poll', a === 'new' ? { q: $('pq').value, options: $('po').value.split(',').map(s => s.trim()) } : { action: a }); $('pm').textContent = d.error || ''; }
+async function announce() { const d = await api('/api/announce', { origin: location.origin }); $('lm').textContent = d.error || 'Sent.'; }
+async function backup() {
+  const r = await fetch('/api/backup', { headers: { Authorization: 'Bearer ' + S } });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(await r.blob()); a.download = 'livetip-backup.json'; a.click();
+}
+fetch('/api/config').then(r => r.json()).then(c => { if (c.single) { $('regbtn').hidden = $('forgot').hidden = true; $('ah').textContent = 'Log in'; } });
+load();
+</script></main></body></html>

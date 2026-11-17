@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="km"><head><meta charset="utf-8"><title>Overlay</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Khmer:wght@400;700&display=swap" rel="stylesheet">
+<style>
+html,body{margin:0;height:100%;overflow:hidden;background:transparent;font:700 30px "Noto Sans Khmer",system-ui,sans-serif;color:#fff;text-shadow:0 2px 6px #000b}
+[hidden]{display:none!important}
+#card{position:fixed;left:50%;top:40px;transform:translate(-50%,-200%);width:min(86vw,760px);background:#ff4d6d;border-radius:22px;padding:20px 28px;text-align:center;transition:transform .45s cubic-bezier(.2,1.3,.4,1);box-shadow:0 10px 30px #0006}
+#card.on{transform:translate(-50%,0)}
+#card b{display:block;font-size:34px}#card span{display:block;font-weight:400;font-size:26px;margin-top:6px}
+#crown{font-size:22px;color:#ffd166;margin-bottom:4px}
+#vid{width:100%;aspect-ratio:16/9;border:0;border-radius:12px;margin-top:12px}
+#scare{position:fixed;inset:0;display:grid;place-items:center;background:#b00020;font-size:120px;text-align:center;opacity:0;pointer-events:none}
+#scare.on{animation:sc .9s steps(2) 1}@keyframes sc{0%,100%{opacity:0}10%,60%{opacity:1}}
+#goal,#top,#poll,#chat{position:fixed;left:20px;right:20px;bottom:20px}
+.track{height:26px;border-radius:99px;background:#0008;margin-top:8px;overflow:hidden}
+.fill{height:100%;background:#ffd166;transition:width .8s;border-radius:99px}
+.row{display:flex;justify-content:space-between;background:#0008;border-radius:12px;padding:6px 16px;margin-top:6px}
+#timer{position:fixed;left:0;right:0;top:20px;text-align:center;font-size:90px;font-variant-numeric:tabular-nums}
+#wheelbox{position:fixed;inset:0;display:grid;place-items:center;align-content:center;gap:10px;text-align:center}
+#chat{top:20px;bottom:auto;font-weight:400;font-size:24px}#chat div{background:#0009;border-radius:10px;padding:4px 12px;margin-top:5px}#chat b{color:#ffd166}
+</style></head>
+<body>
+<div id="card"><div id="crown" hidden>New top donor!</div><b id="t"></b><span id="m"></span><iframe id="vid" hidden allow="autoplay"></iframe></div>
+<div id="scare"></div>
+<div id="goal" hidden><div id="gt"></div><div class="track"><div class="fill" id="gf"></div></div></div>
+<div id="top" hidden></div><div id="poll" hidden></div><div id="timer" hidden></div><div id="chat" hidden></div>
+<div id="wheelbox" hidden><div id="wt"></div><canvas id="cv" width="520" height="520"></canvas><div id="wr"></div></div>
+<script>
+const q = new URLSearchParams(location.search), token = q.get('token'), w = q.get('w') || 'alerts', voice = q.get('voice') !== 'off';
+const $ = id => document.getElementById(id);
+const money = d => d.currency === 'KHR' ? '៛' + Number(d.amount).toLocaleString() : '$' + d.amount;
+let queue = [], busy = false, useServerTts = false, timerAt = 0, cur = null, hideT, audio;
+
+function speak(text) {
+  if (!voice) return;
+  if (useServerTts) { audio = new Audio('/api/tts?token=' + token + '&text=' + encodeURIComponent(text)); audio.play().catch(() => {}); return; }
+  if ('speechSynthesis' in window) { const s = new SpeechSynthesisUtterance(text); s.lang = 'km-KH'; speechSynthesis.speak(s); }
+}
+function hideCard() { clearTimeout(hideT); $('card').classList.remove('on'); $('vid').hidden = true; $('vid').src = ''; if (audio) audio.pause(); if ('speechSynthesis' in window) speechSynthesis.cancel(); setTimeout(() => { busy = false; next(); }, 700); }
+function next() {
+  if (busy || !queue.length) return;
+  busy = true; const d = queue.shift();
+  $('t').textContent = d.name + ' · ' + money(d); $('m').textContent = d.message || '';
+  $('crown').hidden = !d.champion;
+  if (d.media) { $('vid').src = 'https://www.youtube-nocookie.com/embed/' + d.media + '?autoplay=1'; $('vid').hidden = false; }
+  $('card').classList.add('on');
+  if (d.scare) { $('scare').textContent = d.name + ' 😱'; $('scare').classList.remove('on'); void $('scare').offsetWidth; $('scare').classList.add('on'); }
+  speak(d.name + ' ' + money(d) + '. ' + (d.message || ''));
+  hideT = setTimeout(hideCard, d.media ? 30000 : 8000);
+}
+
+function bars(box, d) {
+  box.textContent = '';
+  const h = document.createElement('div'); h.textContent = d.q; box.appendChild(h);
+  const tot = d.options.reduce((s, o) => s + o.v, 0) || 1;
+  d.options.forEach(o => {
+    const r = document.createElement('div'); r.className = 'row'; r.style.background = 'linear-gradient(90deg,#ff4d6d99 ' + (o.v / tot * 100) + '%,#0008 0)';
+    const a = document.createElement('span'); a.textContent = o.t; const b = document.createElement('span'); b.textContent = o.v; r.append(a, b); box.appendChild(r);
+  });
+}
+function stats(d) {
+  useServerTts = d.tts;
+  if (w === 'goal') { $('goal').hidden = false; $('gt').textContent = d.goal.title + ': $' + d.raised + ' of $' + d.goal.target; $('gf').style.width = Math.min(100, d.raised / d.goal.target * 100) + '%'; }
+  if (w === 'top') { const box = $('top'); box.hidden = false; box.textContent = ''; d.top.forEach(t => { const r = document.createElement('div'); r.className = 'row'; r.textContent = t.name; const v = document.createElement('span'); v.textContent = '$' + t.usd; r.appendChild(v); box.appendChild(r); }); }
+  if (w === 'poll') { $('poll').hidden = !d.poll; if (d.poll) bars($('poll'), d.poll); }
+  if (w === 'timer') { timerAt = d.timer; $('timer').hidden = !timerAt; }
+  if (w === 'chat' && !chatOn) { chatOn = true; chat(q.get('video') || d.video, ''); }
+}
+setInterval(() => {
+  if (w !== 'timer' || !timerAt) return;
+  const s = Math.max(0, Math.round((timerAt - Date.now()) / 1000)), p = n => String(n).padStart(2, '0');
+  $('timer').textContent = p(Math.floor(s / 3600)) + ':' + p(Math.floor(s % 3600 / 60)) + ':' + p(s % 60);
+}, 500);
+
+// Wheel (spin and raffle)
+const cv = $('cv'), cx = cv.getContext('2d'), COL = ['#ff4d6d', '#ffd166', '#0f9d92', '#7b6cf6', '#ff9f43', '#3dd6c8'];
+function draw(sl, rot) {
+  const n = sl.length, a = Math.PI * 2 / n; cx.clearRect(0, 0, 520, 520); cx.save(); cx.translate(260, 270); cx.rotate(rot);
+  sl.forEach((s, i) => { cx.beginPath(); cx.moveTo(0, 0); cx.arc(0, 0, 240, i * a, (i + 1) * a); cx.fillStyle = COL[i % COL.length]; cx.fill();
+    cx.save(); cx.rotate((i + .5) * a); cx.fillStyle = '#1e1b3a'; cx.font = '700 24px "Noto Sans Khmer",sans-serif'; cx.textAlign = 'right'; cx.fillText(s, 225, 8); cx.restore(); });
+  cx.restore(); cx.fillStyle = '#fff'; cx.beginPath(); cx.moveTo(240, 6); cx.lineTo(280, 6); cx.lineTo(260, 44); cx.fill();
+}
+function runWheel(d) {
+  $('wheelbox').hidden = false; $('wt').textContent = d.title; $('wr').textContent = '';
+  const a = Math.PI * 2 / d.slices.length, end = -Math.PI / 2 - (d.index + .5) * a - Math.PI * 2 * 5, t0 = performance.now();
+  (function f(t) { const k = Math.min(1, (t - t0) / 5000), e = 1 - Math.pow(1 - k, 3); draw(d.slices, end * e);
+    if (k < 1) requestAnimationFrame(f); else { $('wr').textContent = d.slices[d.index]; speak(d.slices[d.index]); setTimeout(() => $('wheelbox').hidden = true, 7000); } })(t0);
+}
+
+// YouTube live chat
+let chatOn = false;
+async function chat(video, page) {
+  if (!video) { $('chat').hidden = false; $('chat').textContent = 'Set your live video ID in the dashboard.'; return; }
+  let wait = 8000;
+  try {
+    const r = await (await fetch('/api/ytchat?token=' + token + '&video=' + video + '&page=' + (page || ''))).json();
+    $('chat').hidden = false;
+    if (r.error) $('chat').textContent = r.error;
+    else { page = r.next; wait = r.wait; r.messages.forEach(m => { const row = document.createElement('div'); const a = document.createElement('b'); a.textContent = m.author + ': '; row.append(a, document.createTextNode(m.text)); $('chat').appendChild(row); }); while ($('chat').children.length > 8) $('chat').firstChild.remove(); }
+  } catch {}
+  setTimeout(() => chat(video, page), wait);
+}
+
+if (w !== 'alerts') $('card').hidden = $('scare').hidden = true;
+const es = new EventSource('/events/' + token);
+es.onmessage = e => {
+  const d = JSON.parse(e.data);
+  if (d.type === 'tip' && w === 'alerts') { queue.push(d); next(); }
+  if (d.type === 'spin' && w === 'wheel') runWheel(d);
+  if (d.type === 'skip' && w === 'alerts') { queue = []; if (busy) hideCard(); }
+  if (d.type === 'stats') stats(d);
+};
+</script></body></html>
