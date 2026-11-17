@@ -40,7 +40,7 @@ img{width:100%;border-radius:14px;margin-top:12px}.err{color:var(--acc);margin-t
 const slug = location.pathname.split('/')[2], $ = id => document.getElementById(id);
 let info = {};
 const cred = () => ({ name: $('fn').value.trim(), passcode: $('fp').value });
-const post = (p, b) => fetch(p, { method: 'POST', body: JSON.stringify(b) }).then(r => r.json());
+const post = (p, b) => fetch(p, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) }).then(r => r.json());
 async function bal() { const d = await post('/api/points/' + slug, cred()); $('fb').textContent = d.error || 'You have ' + d.points + ' points.'; }
 function renderFan() {
   if (!info.name || !(info.pointsPerUsd > 0)) return;
@@ -58,12 +58,12 @@ function refresh() { fetch('/api/public/' + slug).then(r => r.json()).then(d => 
 fetch('/api/public/' + slug).then(r => r.json()).then(d => {
   info = d; if (!d.name) { $('e').textContent = 'Creator not found.'; return; } renderFan();
   $('h').textContent = 'Tip ' + d.name; $('vn').textContent = 'Media share starts at $' + d.mediaMin + '.';
-  if (d.poll && d.poll.open) { $('poll').hidden = false; $('pq').textContent = d.poll.q; d.poll.options.forEach((o, i) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = o.t; b.onclick = async () => { const r = await fetch('/api/vote/' + slug, { method: 'POST', body: JSON.stringify({ i }) }); const j = await r.json(); $('po').textContent = j.ok ? 'Thanks for voting!' : j.error; }; $('po').appendChild(b); }); }
+  if (d.poll && d.poll.open) { $('poll').hidden = false; $('pq').textContent = d.poll.q; d.poll.options.forEach((o, i) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = o.t; b.onclick = async () => { const r = await fetch('/api/vote/' + slug, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ i }) }); const j = await r.json(); $('po').textContent = j.ok ? 'Thanks for voting!' : j.error; }; $('po').appendChild(b); }); }
 });
 async function go(ev) {
   ev.preventDefault();
   const amount = +$('a').value, currency = $('c').value;
-  const r = await fetch('/api/pay/' + slug, { method: 'POST', body: JSON.stringify({ name: $('n').value.trim() || 'Anonymous', amount, currency, message: $('m').value, videoUrl: $('v').value.trim(), passcode: $('pc').value }) });
+  const r = await fetch('/api/pay/' + slug, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: $('n').value.trim() || 'Anonymous', amount, currency, message: $('m').value, videoUrl: $('v').value.trim(), passcode: $('pc').value }) });
   if (!r.ok) { $('e').textContent = (await r.json()).error; return false; }
   $('f').hidden = true; $('done').hidden = false; $('fn').value = $('n').value.trim(); $('fp').value = $('pc').value;
   $('note').textContent = 'Pay exactly ' + (currency === 'KHR' ? '៛' + amount.toLocaleString() : '$' + amount) + ' so your message is matched.';
