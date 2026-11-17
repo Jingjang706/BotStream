@@ -8,6 +8,7 @@ const VERCEL = !!E.VERCEL;
 const Ably = VERCEL && E.ABLY_API_KEY ? require('ably/promises') : null;
 const ably = Ably ? new Ably.Rest(E.ABLY_API_KEY) : null;
 const channelName = token => 'botstream:' + token;
+const roomChannelName = slug => 'botstream:room:' + slug;
 const requestContext = new AsyncLocalStorage();
 let localDb = { users: {}, sessions: {} };
 if (!VERCEL) {
@@ -173,6 +174,9 @@ function cleanProfile(input) {
     liveUrl: safeProfileUrl(p.liveUrl),
     contactEmail: /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email) ? email : '',
     contactTelegram: safeProfileUrl(p.contactTelegram),
+    roomWelcome: profileText(p.roomWelcome || 'Be kind, have fun and hype up the creator!', 160),
+    chatEnabled: p.chatEnabled !== false,
+    slowMode: Math.min(30, Math.max(0, Math.floor(Number(p.slowMode) || 0))),
     socials: rows(p.socials, 'socials'),
     videos: rows(p.videos, 'videos'),
     articles: rows(p.articles, 'articles'),
@@ -222,6 +226,28 @@ const pubPred = u => u.pred ? { q: u.pred.q, state: u.pred.state, win: u.pred.wi
 function stats(u) {
   const raised = u.tips.reduce((s, t) => s + usd(t), 0);
   return { type: 'stats', goal: u.goal, raised: +raised.toFixed(2), top: tops(u).slice(0, 5).map(([name, v]) => ({ name, usd: +v.toFixed(2) })), timer: u.timer || 0, poll: pubPoll(u), pred: pubPred(u), tts: !!E.GOOGLE_TTS_KEY, video: cfg(u).ytVideo };
+}
+function roomSnapshot(u) {
+  const p = cleanProfile(u.profile);
+  const s = stats(u);
+  const now = Date.now();
+  return {
+    creator: { slug: u.slug, name: u.name, profile: p },
+    live: { isLive: p.isLive, watchUrl: p.liveUrl, videoId: /^[\w-]{11}$/.test(String(cfg(u).ytVideo || '')) ? cfg(u).ytVideo : ((p.liveUrl.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([\w-]{11})/) || [])[1] || '') },
+    khqr: u.khqr || '',
+    goal: { ...(u.goal || { title: 'Stream goal', target: 50 }), raised: s.raised, percent: Math.min(100, Math.round(s.raised / Math.max(1, (u.goal || {}).target || 50) * 100)) },
+    stats: s,
+    poll: pubPoll(u),
+    pred: pubPred(u),
+    messages: (u.roomMessages || []).slice(-40),
+    reactions: Object.fromEntries(Object.entries(u.roomReactions || {}).filter(([, v]) => now - v.at < 20000).map(([k, v]) => [k, v.count])),
+    recentTips: (u.tips || []).slice(-6).reverse().map(t => ({ name: t.name, amount: t.amount, currency: t.currency, message: t.message, at: t.at }))
+  };
+}
+function publishRoomEvent(slug, event) {
+  if (!ably) return;
+  ably.channels.get(roomChannelName(slug)).publish('room', event)
+    .catch(error => console.error('BotStream room event publish failed:', error));
 }
 function spin(u, title, slices) {
   slices = slices || u.wheel || SLICES;
@@ -341,6 +367,7 @@ async function app(req, res) {
   }
   if (p === '/app') return page(res, 'app.html');
   if (p.startsWith('/creator/')) return page(res, 'creator.html');
+  if (p.startsWith('/live/')) return page(res, 'live.html');
   if (p === '/overlay') return page(res, 'overlay.html');
   if (p === '/admin') return page(res, 'admin.html');
   if (p.startsWith('/pay/')) return page(res, 'pay.html');
@@ -367,6 +394,51 @@ async function app(req, res) {
     const u = db.users[String(b.slug || '').toLowerCase()];
     if (!u || String(b.password || '').length < 6 || hash(b.recovery, u.salt) !== u.rec) return json(res, { error: 'Recovery code or password is not valid.' }, 401);
     u.pass = hash(b.password, u.salt); return login(res, u.slug);
+  }
+  const roomMatch = p.match(/^\/api\/room\/([a-z0-9_]{3,20})(?:\/(chat|react))?$/i);
+  if (roomMatch && m === 'GET' && !roomMatch[2]) {
+    const roomUser = db.users[roomMatch[1].toLowerCase()];
+    if (!roomUser) return json(res, { error: 'Creator not found.' }, 404);
+    return json(res, roomSnapshot(roomUser));
+  }
+  if (roomMatch && m === 'POST' && roomMatch[2] === 'chat') {
+    const roomUser = db.users[roomMatch[1].toLowerCase()];
+    if (!roomUser) return json(res, { error: 'Creator not found.' }, 404);
+    const profile = cleanProfile(roomUser.profile);
+    if (!profile.chatEnabled) return json(res, { error: 'Chat is paused by the creator.' }, 403);
+    if (await limited(req, 'room-chat:' + roomUser.slug, 8)) return json(res, { error: 'Slow down a little before sending another message.' }, 429);
+    const name = profileText(b.name || 'Guest', 24).replace(/[<>]/g, '');
+    const message = profileText(b.message, 220).replace(/\s+/g, ' ');
+    if (!name || !message) return json(res, { error: 'Add your name and a message.' }, 400);
+    if (/https?:\/\/|www\./i.test(message)) return json(res, { error: 'Links are disabled in live chat.' }, 400);
+    const visitor = crypto.createHash('sha256').update(ip(req) + '|' + String(req.headers['user-agent'] || '')).digest('hex').slice(0, 24);
+    roomUser.roomChatCooldown = roomUser.roomChatCooldown || {};
+    const previous = roomUser.roomChatCooldown[visitor] || 0;
+    if (profile.slowMode && Date.now() - previous < profile.slowMode * 1000) return json(res, { error: 'Slow mode is on. Wait ' + Math.ceil((profile.slowMode * 1000 - (Date.now() - previous)) / 1000) + 's.' }, 429);
+    const now = Date.now();
+    roomUser.roomChatCooldown[visitor] = now;
+    roomUser.roomChatCooldown = Object.fromEntries(Object.entries(roomUser.roomChatCooldown).filter(([, at]) => now - at < 60000).slice(-500));
+    roomUser.roomMessages = roomUser.roomMessages || [];
+    const item = { id: rid(), name, message, at: now };
+    roomUser.roomMessages.push(item);
+    roomUser.roomMessages = roomUser.roomMessages.slice(-100);
+    save();
+    publishRoomEvent(roomUser.slug, { type: 'chat', item });
+    return json(res, { ok: true, item });
+  }
+  if (roomMatch && m === 'POST' && roomMatch[2] === 'react') {
+    const roomUser = db.users[roomMatch[1].toLowerCase()];
+    if (!roomUser) return json(res, { error: 'Creator not found.' }, 404);
+    if (await limited(req, 'room-react:' + roomUser.slug, 15)) return json(res, { error: 'Too many reactions. Try again shortly.' }, 429);
+    const allowed = ['🔥', '💜', '👏', '😂', '❤️', '🎉', '🚀'];
+    const emoji = String(b.emoji || '');
+    if (!allowed.includes(emoji)) return json(res, { error: 'Choose an available reaction.' }, 400);
+    roomUser.roomReactions = roomUser.roomReactions || {};
+    const now = Date.now(), old = roomUser.roomReactions[emoji];
+    roomUser.roomReactions[emoji] = { count: old && now - old.at < 20000 ? old.count + 1 : 1, at: now };
+    save();
+    publishRoomEvent(roomUser.slug, { type: 'reaction', emoji, count: roomUser.roomReactions[emoji].count });
+    return json(res, { ok: true, reactions: Object.fromEntries(Object.entries(roomUser.roomReactions).filter(([, v]) => now - v.at < 20000).map(([k, v]) => [k, v.count])) });
   }
   if (p.startsWith('/api/public/')) {
     const u = db.users[p.slice(12)];
@@ -431,6 +503,23 @@ async function app(req, res) {
     if (!u) return json(res, { error: 'Bad token' }, 404);
     return json(res, { matched: handleNote(u, String(b.text || b.message || raw)) });
   }
+  if (p.startsWith('/api/room-auth/') && m === 'GET') {
+    const roomUser = db.users[p.slice('/api/room-auth/'.length).toLowerCase()];
+    if (!roomUser || !ably) return json(res, { error: 'Room realtime is not configured.' }, 501);
+    try {
+      const channel = roomChannelName(roomUser.slug);
+      const tokenRequest = await ably.auth.createTokenRequest({
+        clientId: 'viewer-' + rid(),
+        capability: { [channel]: ['subscribe'] },
+        ttl: 60 * 60 * 1000
+      });
+      res.setHeader('Cache-Control', 'no-store');
+      return json(res, tokenRequest);
+    } catch (error) {
+      console.error('BotStream room realtime token error:', error);
+      return json(res, { error: 'Could not authorize live room connection.' }, 503);
+    }
+  }
   if (p === '/api/ably-token' && m === 'GET') {
     const owner = byToken('alertToken', q.get('token') || '');
     if (!owner || !ably) return json(res, { error: 'Realtime is not configured.' }, 501);
@@ -481,7 +570,16 @@ async function app(req, res) {
   const u = authUser(req);
   if (p.startsWith('/api/') && !u) return json(res, { error: 'Please log in.' }, 401);
   if (p === '/api/backup') { const { pass, salt, rec, ...rest } = u; rest.points = Object.fromEntries(Object.entries(pts(u)).map(([k, a]) => [k, { name: a.name, p: a.p }])); return json(res, rest); }
-  if (p === '/api/me') return json(res, { slug: u.slug, name: u.name, profile: cleanProfile(u.profile), khqr: u.khqr, goal: u.goal, cfg: cfg(u), wheel: u.wheel || SLICES, raffle: (u.raffle || []).length, alertToken: u.alertToken, notifyToken: u.notifyToken, tips: u.tips.slice(-15).reverse(), stats: stats(u), redeems: u.redeems || DEFREDEEMS, players: Object.keys(pts(u)).length, tgReady: !!E.TELEGRAM_BOT_TOKEN, ytReady: !!E.YOUTUBE_API_KEY });
+  if (p === '/api/room/moderate' && m === 'POST') {
+    u.roomMessages = u.roomMessages || [];
+    if (b.action === 'clear') u.roomMessages = [];
+    else if (b.action === 'delete' && b.id) u.roomMessages = u.roomMessages.filter(item => item.id !== String(b.id));
+    else return json(res, { error: 'Choose a message or clear the room chat.' }, 400);
+    save();
+    publishRoomEvent(u.slug, { type: 'moderation', action: b.action, id: b.id || '' });
+    return json(res, { ok: true, messages: u.roomMessages });
+  }
+  if (p === '/api/me') return json(res, { slug: u.slug, name: u.name, profile: cleanProfile(u.profile), roomMessages: (u.roomMessages || []).slice(-30).reverse(), khqr: u.khqr, goal: u.goal, cfg: cfg(u), wheel: u.wheel || SLICES, raffle: (u.raffle || []).length, alertToken: u.alertToken, notifyToken: u.notifyToken, tips: u.tips.slice(-15).reverse(), stats: stats(u), redeems: u.redeems || DEFREDEEMS, players: Object.keys(pts(u)).length, tgReady: !!E.TELEGRAM_BOT_TOKEN, ytReady: !!E.YOUTUBE_API_KEY });
   if (p === '/api/settings' && m === 'POST') {
     if (b.profile && typeof b.profile === 'object') u.profile = cleanProfile(b.profile);
     if (b.name) u.name = String(b.name).slice(0, 30);
@@ -564,7 +662,7 @@ async function handleRequest(req, res) {
     }
     const statelessGet = req.method === 'GET' && (
       pathName === '/' || pathName === '/app' || pathName === '/overlay' ||
-      pathName === '/admin' || pathName.startsWith('/pay/') || pathName === '/api/config'
+      pathName === '/admin' || pathName.startsWith('/pay/') || pathName.startsWith('/creator/') || pathName.startsWith('/live/') || pathName === '/api/config'
     );
     if (statelessGet) {
       return requestContext.run({ users: {}, sessions: {} }, () => app(req, res));
