@@ -51,6 +51,9 @@ button.alt{background:transparent;color:var(--ink);border:2px solid var(--ink);p
     </div>
     <label for="siteQuote">Signature quote / creator motto</label><input id="siteQuote" maxlength="180" placeholder="Turning passion into impact.">
     <label for="siteMetrics">Audience metrics — one per line: platform | count (max 4)</label><textarea id="siteMetrics" placeholder="Facebook | 900K+&#10;YouTube | 549K+&#10;TikTok | 280K+"></textarea>
+    <label for="roomWelcome">Live Lounge welcome message</label><input id="roomWelcome" maxlength="160" placeholder="Be kind, have fun and hype up the creator!">
+    <label><input id="chatEnabled" type="checkbox" checked> Enable public audience chat</label>
+    <label for="slowMode">Chat slow mode (seconds between messages per visitor)</label><input id="slowMode" type="number" min="0" max="30" value="0">
     <label for="siteBio">About / creator introduction</label><textarea id="siteBio" rows="4" maxlength="1800" placeholder="Tell your audience who you are, what you create and why it matters."></textarea>
     <label><input id="siteLive" type="checkbox"> I am live now (manual status)</label>
     <p class="mut">The LIVE badge is manual. Set your stream URL above; automatic platform live detection is not enabled yet.</p>
@@ -62,6 +65,11 @@ button.alt{background:transparent;color:var(--ink);border:2px solid var(--ink);p
     <button onclick="saveProfile()">Save public website</button> <span class="mut" id="profileStatus"></span>
     <div class="link"><code id="creatorUrl"></code><button class="alt" onclick="copy('creatorUrl')">Copy website link</button></div>
     <p class="mut"><a id="previewCreator" href="#" target="_blank" rel="noopener">Preview your public creator website ↗</a></p>
+    <div class="link"><code id="liveRoomUrl"></code><button class="alt" onclick="copy('liveRoomUrl')">Copy Live Lounge link</button></div>
+    <p class="mut"><a id="previewLiveRoom" href="#" target="_blank" rel="noopener">Open your audience Live Lounge ↗</a></p>
+  </section>
+  <section><h2>Audience chat moderation</h2><p class="mut">Review recent public messages and remove messages that break your room rules.</p>
+    <button class="alt" onclick="moderateChat('clear')">Clear all room messages</button><div id="roomModeration" class="mut"></div><span id="moderationStatus" class="mut"></span>
   </section>
   <section><h2>Live controls</h2><p class="mut">Works from your phone while you stream.</p>
     <button onclick="act('test')">Test alert</button><button onclick="act('skip')">Skip alert</button><button onclick="act('spin')">Test spin</button>
@@ -125,7 +133,7 @@ async function load() {
   if (me.error) { localStorage.removeItem('session'); S = null; return; }
   $('auth').hidden = true; $('dash').hidden = false;
   const o = location.origin, t = me.alertToken, ov = w => o + '/overlay?w=' + w + '&token=' + t;
-  const L = [['Tip page (share with viewers)', o + '/pay/' + me.slug], ['Official creator website', o + '/creator/' + me.slug], ['Alerts overlay', ov('alerts')], ['Spin and raffle wheel overlay', ov('wheel')], ['Goal bar overlay', ov('goal')], ['Top donors overlay', ov('top')], ['Subathon timer overlay', ov('timer')], ['Poll overlay', ov('poll')], ['Prediction overlay', ov('predict')], ['YouTube chat overlay', ov('chat')]];
+  const L = [['Tip page (share with viewers)', o + '/pay/' + me.slug], ['Official creator website', o + '/creator/' + me.slug], ['Audience Live Lounge', o + '/live/' + me.slug], ['Alerts overlay', ov('alerts')], ['Spin and raffle wheel overlay', ov('wheel')], ['Goal bar overlay', ov('goal')], ['Top donors overlay', ov('top')], ['Subathon timer overlay', ov('timer')], ['Poll overlay', ov('poll')], ['Prediction overlay', ov('predict')], ['YouTube chat overlay', ov('chat')]];
   $('links').textContent = '';
   L.forEach(([name, url], i) => {
     const d = document.createElement('div'); d.innerHTML = '<div class="mut"></div><div class="link"><code id="l' + i + '"></code><button class="alt">Copy</button></div>';
@@ -145,6 +153,9 @@ async function load() {
   $('siteSchedule').value = profile.schedule || '';
   $('siteLiveUrl').value = profile.liveUrl || '';
   $('siteBio').value = profile.bio || '';
+  $('roomWelcome').value = profile.roomWelcome || 'Be kind, have fun and hype up the creator!';
+  $('chatEnabled').checked = profile.chatEnabled !== false;
+  $('slowMode').value = profile.slowMode || 0;
   $('siteQuote').value = profile.quote || '';
   $('siteMetrics').value = (profile.metrics || []).map(item => item.label + ' | ' + item.value).join('\\n');
   $('siteLive').checked = !!profile.isLive;
@@ -155,6 +166,9 @@ async function load() {
   $('sitePartners').value = linesFor(profile.partners, ['title', 'url']);
   $('creatorUrl').textContent = o + '/creator/' + me.slug;
   $('previewCreator').href = o + '/creator/' + me.slug;
+  $('liveRoomUrl').textContent = o + '/live/' + me.slug;
+  $('previewLiveRoom').href = o + '/live/' + me.slug;
+  renderRoomModeration(me.roomMessages || []);
   const c = me.cfg; $('dn').value = me.name; $('gt').value = me.goal.title; $('gg').value = me.goal.target;
   $('sm').value = c.spinMin; $('ss').value = c.scareMin; $('tp').value = c.timerPerUsd; $('mm').value = c.mediaMin; $('tc').value = c.tgChat; $('yv').value = c.ytVideo; $('ws').value = me.wheel.join(', '); $('pp').value = c.pointsPerUsd; $('dh').value = c.discordHook || ''; $('rd').value = me.redeems.map(r => r.title + ' | ' + r.cost + ' | ' + r.kind).join('\n');
   $('rn').textContent = me.raffle + ' entries';
@@ -188,6 +202,9 @@ async function saveProfile() {
     quote: $('siteQuote').value,
     metrics: parseProfileRows('siteMetrics', ['label', 'value']),
     isLive: $('siteLive').checked,
+    roomWelcome: $('roomWelcome').value,
+    chatEnabled: $('chatEnabled').checked,
+    slowMode: +$('slowMode').value,
     socials: parseProfileRows('siteSocials', ['title', 'url']),
     videos: parseProfileRows('siteVideos', ['title', 'description', 'url']),
     articles: parseProfileRows('siteArticles', ['title', 'excerpt', 'url']),
@@ -197,6 +214,22 @@ async function saveProfile() {
   const result = await api('/api/settings', { profile });
   $('profileStatus').textContent = result.ok ? 'Website saved. Your public page is updated.' : (result.error || 'Could not save website settings.');
   if (result.ok) await load();
+}
+function renderRoomModeration(items) {
+  const box = $('roomModeration'); box.textContent = '';
+  (items || []).forEach(item => {
+    const row = document.createElement('div'); row.className = 'link';
+    const label = document.createElement('span'); label.textContent = item.name + ': ' + item.message;
+    const button = document.createElement('button'); button.className = 'alt'; button.textContent = 'Delete';
+    button.onclick = () => moderateChat('delete', item.id);
+    row.append(label, button); box.append(row);
+  });
+  if (!items || !items.length) box.textContent = 'No recent messages.';
+}
+async function moderateChat(action, id) {
+  const result = await api('/api/room/moderate', { action, id });
+  $('moderationStatus').textContent = result.error || 'Chat updated.';
+  if (result.ok) { renderRoomModeration(result.messages); await load(); }
 }
 const act = p => api('/api/' + p, {});
 async function raffle(a) { const d = await api('/api/raffle', { action: a }); $('rn').textContent = d.error || (a === 'clear' ? '0 entries' : d.entries + ' entries'); }
