@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#11131b">
+<meta name="description" content="Official creator website">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Creator website">
+<meta property="og:description" content="Follow the creator, explore content and support their work.">
+<title>Creator website</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Noto+Sans+Khmer:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#11131b;--panel:#191c27;--panel2:#202432;--ink:#f5f6fb;--muted:#a3aabe;--line:#303647;--accent:#f05b78;--cyan:#80e3dd;--gold:#f2d18b;--radius:22px;color-scheme:dark}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:86px}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 "DM Sans","Noto Sans Khmer",system-ui,sans-serif}
+a{color:inherit}
+button,input{font:inherit}
+a:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid var(--cyan);outline-offset:3px}
+.shell{width:min(1160px,calc(100% - 40px));margin:auto}
+header{position:sticky;top:0;z-index:20;background:#11131beF;backdrop-filter:blur(18px);border-bottom:1px solid #ffffff12}
+.nav{height:76px;display:flex;align-items:center;justify-content:space-between;gap:22px}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none;font:700 17px "Space Grotesk",sans-serif;letter-spacing:-.03em}
+.mark{width:35px;height:35px;display:grid;place-items:center;border-radius:12px;background:var(--accent);color:#fff;font-size:19px}
+nav{display:flex;gap:24px;align-items:center}
+nav a{text-decoration:none;color:var(--muted);font-size:14px;font-weight:600}
+nav a:hover{color:var(--ink)}
+.nav-cta,.btn{display:inline-flex;align-items:center;justify-content:center;gap:9px;border-radius:999px;padding:12px 19px;background:var(--accent);color:white;text-decoration:none;border:1px solid transparent;font-weight:700;transition:transform .2s,filter .2s}
+.nav-cta:hover,.btn:hover{transform:translateY(-2px);filter:brightness(1.08)}
+.btn.secondary{background:transparent;border-color:var(--line);color:var(--ink)}
+.menu{display:none;background:transparent;color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:8px 12px}
+.hero{position:relative;display:grid;grid-template-columns:1.08fr .92fr;gap:56px;align-items:center;padding:88px 0 92px;min-height:590px}
+.hero:before{content:"";position:absolute;z-index:-1;left:-18vw;top:4%;width:55vw;height:520px;background:radial-gradient(ellipse,#f05b7820,transparent 68%);pointer-events:none}
+.eyebrow{display:inline-flex;align-items:center;gap:10px;color:var(--cyan);font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase}
+.dot{width:8px;height:8px;background:#777;border-radius:50%;box-shadow:0 0 0 5px #ffffff0c}
+.dot.live{background:#ff5d6c;box-shadow:0 0 0 5px #ff5d6c22,0 0 18px #ff5d6c88}
+h1,h2,h3{font-family:"Space Grotesk","Noto Sans Khmer",sans-serif;line-height:1.1;margin:0}
+h1{font-size:clamp(48px,7vw,82px);letter-spacing:-.065em;margin:22px 0 15px;max-width:10ch}
+.tagline{color:var(--cyan);font:600 clamp(18px,2vw,23px)/1.4 "Space Grotesk","Noto Sans Khmer",sans-serif;margin:0 0 18px;max-width:34ch}
+.bio{max-width:59ch;color:var(--muted);margin:0 0 26px;white-space:pre-wrap}
+.place{display:inline-flex;align-items:center;gap:8px;color:var(--muted);font-size:13px;margin-bottom:26px}
+.actions{display:flex;flex-wrap:wrap;gap:12px}
+.socials{display:flex;flex-wrap:wrap;gap:9px;margin-top:28px}
+.socials a{font-size:13px;font-weight:700;color:#d9deeb;text-decoration:none;border:1px solid var(--line);padding:8px 13px;border-radius:999px;background:#ffffff04}
+.socials a:hover{border-color:var(--cyan);color:var(--cyan)}
+.visual{min-height:420px;border-radius:32px;position:relative;overflow:hidden;background:linear-gradient(145deg,#272d3d,#171a25 58%,#3a2638);border:1px solid #ffffff18;display:grid;place-items:center;box-shadow:0 28px 90px #0005}
+.visual:before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 18% 10%,#80e3dd24,transparent 38%),radial-gradient(circle at 85% 80%,#f05b7835,transparent 43%)}
+.cover{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.34}
+.portrait{width:min(68%,310px);aspect-ratio:1;object-fit:cover;border-radius:28px;border:1px solid #ffffff55;position:relative;z-index:1;box-shadow:0 22px 50px #0008}
+.avatar-fallback{position:relative;z-index:1;width:210px;height:210px;border-radius:50%;display:grid;place-items:center;background:#ffffff12;border:1px solid #ffffff35;color:#fff;font:700 76px "Space Grotesk",sans-serif}
+.float-card{position:absolute;z-index:2;left:22px;bottom:22px;right:22px;background:#11131bde;border:1px solid #ffffff20;backdrop-filter:blur(18px);padding:16px 18px;border-radius:18px;display:flex;justify-content:space-between;align-items:center;gap:14px}
+.float-card b{font:700 15px "Space Grotesk",sans-serif}
+.float-card small{display:block;color:var(--muted);font-size:12px}
+.float-tag{color:var(--gold);font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase}
+section.block{padding:76px 0;border-top:1px solid #ffffff12}
+.section-head{display:flex;justify-content:space-between;gap:24px;align-items:end;margin-bottom:28px}
+.kicker{color:var(--accent);font-weight:700;text-transform:uppercase;letter-spacing:.13em;font-size:11px;margin-bottom:10px}
+h2{font-size:clamp(34px,5vw,49px);letter-spacing:-.055em}
+.section-sub{color:var(--muted);margin:10px 0 0;max-width:56ch}
+.about{display:grid;grid-template-columns:.7fr 1.3fr;gap:50px;align-items:start}
+.about-mark{font:700 clamp(50px,9vw,100px)/.9 "Space Grotesk",sans-serif;color:#ffffff10;letter-spacing:-.09em}
+.about-copy{color:#c2c8d5;white-space:pre-wrap;max-width:70ch}
+.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.card{min-width:0;display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:21px;transition:transform .2s,border-color .2s}
+a.card{text-decoration:none}
+a.card:hover{transform:translateY(-4px);border-color:#80e3dd80}
+.card-top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}
+.card-icon{width:38px;height:38px;border-radius:12px;background:#ffffff0b;display:grid;place-items:center;color:var(--cyan);font-size:17px}
+.pill{color:var(--gold);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.12em}
+.card h3{font-size:19px;letter-spacing:-.03em;margin-bottom:9px}
+.card p{color:var(--muted);font-size:14px;margin:0;flex:1}
+.card-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;color:var(--cyan);font-size:12px;font-weight:700;margin-top:20px}
+.partner{display:flex;align-items:center;gap:14px;min-height:90px}
+.partner img{width:50px;height:50px;object-fit:contain;border-radius:12px;background:#fff;padding:5px}
+.article-tools{display:flex;gap:10px;align-items:center;margin-bottom:20px}
+.article-tools input{width:min(360px,100%);background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:999px;padding:12px 17px}
+.empty{display:none;color:var(--muted);padding:20px 0}
+.schedule{padding:26px;border-radius:22px;border:1px solid #80e3dd35;background:linear-gradient(120deg,#80e3dd0b,#f05b780d);display:flex;justify-content:space-between;gap:22px;align-items:center}
+.schedule strong{font:700 20px "Space Grotesk",sans-serif}
+.schedule p{color:var(--muted);margin:6px 0 0;white-space:pre-wrap}
+.contact{display:grid;grid-template-columns:1.1fr .9fr;gap:24px}
+.contact-panel{background:var(--panel);border:1px solid var(--line);border-radius:22px;padding:28px}
+.contact-panel p{color:var(--muted)}
+footer{border-top:1px solid #ffffff12;padding:32px 0 48px;color:var(--muted);font-size:13px}
+.footer-inner{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+footer a{color:var(--ink);text-decoration:none}
+.hidden{display:none!important}
+[hidden]{display:none!important}
+@media(max-width:850px){nav{display:none;position:absolute;top:76px;left:0;right:0;background:#171a24;padding:20px 24px;border-bottom:1px solid var(--line);flex-direction:column;align-items:flex-start}.menu{display:block}.nav.open nav{display:flex}.nav-cta{display:none}.hero{grid-template-columns:1fr;gap:36px;padding:62px 0 70px}.visual{min-height:350px}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.about{grid-template-columns:1fr;gap:15px}.about-mark{display:none}.contact{grid-template-columns:1fr}}
+@media(max-width:540px){.shell{width:min(100% - 30px,1160px)}.hero{padding:46px 0 56px}.visual{min-height:300px}.grid{grid-template-columns:1fr}.section-head{display:block}.schedule{display:block}.schedule .btn{margin-top:18px}.float-card{left:12px;right:12px;bottom:12px}.actions .btn{flex:1}.socials{gap:7px}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<header>
+  <div class="shell nav" id="nav">
+    <a class="brand" href="#top"><span class="mark">✦</span><span id="brandName">CREATOR</span></a>
+    <nav aria-label="Main navigation">
+      <a href="#about">About</a><a href="#content">Content</a><a href="#articles">Articles</a><a href="#community">Community</a><a href="#partners">Partners</a><a href="#contact">Contact</a>
+    </nav>
+    <a class="nav-cta" id="topSupport" href="#">Support ↗</a>
+    <button class="menu" id="menu" type="button" aria-expanded="false">Menu</button>
+  </div>
+</header>
+<main id="main" hidden>
+  <div class="shell">
+    <section class="hero" id="top">
+      <div>
+        <div class="eyebrow"><span class="dot" id="liveDot"></span><span id="statusText">CREATOR · CAMBODIA</span></div>
+        <h1 id="creatorName">Creator</h1>
+        <p class="tagline" id="tagline" hidden></p>
+        <p class="bio" id="bio" hidden></p>
+        <div class="place" id="place" hidden>⌖ <span id="location"></span></div>
+        <div class="actions">
+          <a class="btn" id="heroSupport" href="#">Support this creator ↗</a>
+          <a class="btn secondary" href="#content">Explore content ↓</a>
+        </div>
+        <div class="socials" id="socials" hidden></div>
+      </div>
+      <div class="visual" id="visual">
+        <img class="cover" id="cover" alt="" hidden>
+        <div class="avatar-fallback" id="avatarFallback">✦</div>
+        <img class="portrait" id="portrait" alt="Creator portrait" hidden>
+        <div class="float-card">
+          <div><b id="floatTitle">Creator home</b><small id="floatSubtitle">Stories · Streams · Community</small></div>
+          <span class="float-tag" id="floatTag">OFFICIAL PAGE</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="block" id="about" hidden>
+      <div class="about"><div><div class="kicker">01 / THE CREATOR</div><h2>More than a channel.</h2></div><div><div class="about-mark">ABOUT</div><p class="about-copy" id="aboutCopy"></p></div></div>
+    </section>
+
+    <section class="block" id="scheduleBlock" hidden>
+      <div class="schedule"><div><div class="kicker">STREAM STATUS</div><strong id="scheduleTitle">Live schedule</strong><p id="scheduleText"></p></div><a class="btn" id="liveButton" href="#" hidden>Watch live ↗</a></div>
+    </section>
+
+    <section class="block" id="content" hidden>
+      <div class="section-head"><div><div class="kicker">02 / WATCH & EXPLORE</div><h2>Featured content</h2><p class="section-sub">Selected videos, projects and stories.</p></div></div>
+      <div class="grid" id="videos"></div>
+    </section>
+
+    <section class="block" id="articles" hidden>
+      <div class="section-head"><div><div class="kicker">03 / IDEAS & UPDATES</div><h2>Articles & updates</h2><p class="section-sub">Browse the latest posts and useful resources.</p></div></div>
+      <div class="article-tools"><input id="articleSearch" type="search" placeholder="Search articles…" aria-label="Search articles"></div>
+      <div class="grid" id="articleGrid"></div>
+      <p class="empty" id="articleEmpty">No articles match that search.</p>
+    </section>
+
+    <section class="block" id="community" hidden>
+      <div class="section-head"><div><div class="kicker">04 / JOIN IN</div><h2>Find your community</h2><p class="section-sub">Connect, chat and take part beyond the stream.</p></div></div>
+      <div class="grid" id="communities"></div>
+    </section>
+
+    <section class="block" id="partners" hidden>
+      <div class="section-head"><div><div class="kicker">05 / COLLABORATIONS</div><h2>Partners & friends</h2><p class="section-sub">Brands and teams supporting the work.</p></div></div>
+      <div class="grid" id="partnerGrid"></div>
+    </section>
+
+    <section class="block" id="contact" hidden>
+      <div class="contact"><div><div class="kicker">06 / GET IN TOUCH</div><h2>Let's work together.</h2><p class="section-sub">For collaborations, business inquiries or a simple hello.</p></div>
+        <div class="contact-panel"><h3 id="contactTitle">Contact</h3><p id="contactNote">Choose a channel below to get in touch.</p><div class="actions" id="contactLinks"></div></div>
+      </div>
+    </section>
+
+    <section class="block" id="supportBlock">
+      <div class="contact-panel">
+        <div class="kicker">SUPPORT THE CREATOR</div><h2>Help make the next project happen.</h2>
+        <p class="section-sub">Support the stream with KHQR. Your message can appear in the live overlay when the payment notification is matched.</p>
+        <a class="btn" id="supportBottom" href="#">Open support page ↗</a>
+      </div>
+    </section>
+  </div>
+</main>
+<div class="shell" id="loading" style="padding:100px 0;color:#a3aabe">Loading creator website…</div>
+<div class="shell" id="error" hidden style="padding:100px 0"><h1 style="font-size:40px">Creator not found</h1><p style="color:#a3aabe">This public creator page is unavailable or the username is incorrect.</p><a class="btn" href="/">Back to LiveTip KH</a></div>
+<footer><div class="shell footer-inner"><span id="footerName">Creator</span><span>Creator website powered by <a href="/">LiveTip KH</a> · <span id="year"></span></span></div></footer>
+<script>
+(function(){
+  var $ = function(id){return document.getElementById(id);};
+  var slug = location.pathname.split('/').filter(Boolean)[1] || '';
+  var supportUrl = '/pay/' + encodeURIComponent(slug);
+  var safeUrl = function(value){try{var u=new URL(value);return ['http:','https:'].indexOf(u.protocol)>=0?u.href:'';}catch(e){return '';}};
+  var show = function(id, yes){$(id).hidden = !yes;};
+  var link = function(href, text, className){
+    var a=document.createElement('a');a.href=href;a.textContent=text;a.className=className||'';
+    a.target='_blank';a.rel='noopener noreferrer';return a;
+  };
+  var card = function(item, icon, tag, description){
+    var a=link(safeUrl(item.url),'','card');if(!a.href||a.href==='#')return null;
+    var top=document.createElement('div');top.className='card-top';
+    var glyph=document.createElement('span');glyph.className='card-icon';glyph.textContent=icon;
+    var pill=document.createElement('span');pill.className='pill';pill.textContent=tag||'EXPLORE';
+    top.append(glyph,pill);
+    var title=document.createElement('h3');title.textContent=item.title||'';
+    a.append(top,title);
+    if(description){var p=document.createElement('p');p.textContent=description;a.append(p);}
+    var foot=document.createElement('div');foot.className='card-foot';foot.textContent='Open link ↗';a.append(foot);
+    return a;
+  };
+  var addCards = function(containerId, sectionId, items, icon, tag, descriptionKey){
+    var container=$(containerId);container.textContent='';
+    (items||[]).forEach(function(item){
+      var c=card(item,icon,tag,item[descriptionKey]||'');
+      if(c)container.append(c);
+    });
+    show(sectionId,container.children.length>0);
+  };
+  var render = function(data){
+    var p=data.profile||{}, name=p.title||data.name||slug;
+    document.title=name+' — Official Creator Website';
+    document.querySelector('meta[name="description"]').setAttribute('content',(p.tagline||p.bio||'Follow the creator, explore content and support their work.').slice(0,160));
+    document.querySelector('meta[property="og:title"]').setAttribute('content',name);
+    document.documentElement.style.setProperty('--accent',p.theme||'#f05b78');
+    $('brandName').textContent=name;
+    $('creatorName').textContent=name;
+    $('footerName').textContent=name;
+    $('floatTitle').textContent=name;
+    $('floatSubtitle').textContent=p.location||'Stories · Streams · Community';
+    $('year').textContent=new Date().getFullYear();
+    $('topSupport').href=supportUrl;$('heroSupport').href=p.isLive&&safeUrl(p.liveUrl)?safeUrl(p.liveUrl):supportUrl;$('supportBottom').href=supportUrl;
+    $('heroSupport').textContent=p.isLive?'Watch live ↗':'Support this creator ↗';
+    $('topSupport').textContent=p.isLive?'Watch live ↗':'Support ↗';
+    $('statusText').textContent=p.isLive?'LIVE NOW · '+(p.location||'CREATOR'):'CREATOR · '+(p.location||'CAMBODIA');
+    $('liveDot').className=p.isLive?'dot live':'dot';
+    if(p.tagline){$('tagline').textContent=p.tagline;show('tagline',true);}
+    if(p.bio){$('bio').textContent=p.bio;show('bio',true);$('aboutCopy').textContent=p.bio;show('about',true);}
+    if(p.location){$('location').textContent=p.location;show('place',true);}
+    if(p.avatarUrl){$('portrait').src=safeUrl(p.avatarUrl);show('portrait',true);show('avatarFallback',false);$('portrait').addEventListener('error',function(){show('portrait',false);show('avatarFallback',true);},{once:true});}
+    else {$('avatarFallback').textContent=(name.trim().charAt(0)||'✦').toUpperCase();}
+    if(p.coverUrl){$('cover').src=safeUrl(p.coverUrl);show('cover',true);}
+    if(p.schedule||p.isLive){
+      $('scheduleText').textContent=p.isLive?'The creator has marked this channel as live now.':p.schedule;
+      show('scheduleBlock',true);
+      if(p.isLive&&safeUrl(p.liveUrl)){$('liveButton').href=safeUrl(p.liveUrl);show('liveButton',true);}
+      else show('liveButton',false);
+      $('scheduleTitle').textContent=p.isLive?'Live right now':'Streaming schedule';
+    }
+    var socials=$('socials');socials.textContent='';
+    (p.socials||[]).forEach(function(item){var href=safeUrl(item.url);if(href)socials.append(link(href,item.title,'social-link'));});
+    show('socials',socials.children.length>0);
+    addCards('videos','content',p.videos,'▶','FEATURED','description');
+    addCards('articleGrid','articles',p.articles,'✎','ARTICLE','excerpt');
+    addCards('communities','community',p.communities,'◎','COMMUNITY','description');
+    var partners=$('partnerGrid');partners.textContent='';
+    (p.partners||[]).forEach(function(item){
+      var a=link(safeUrl(item.url),'','card partner');if(!a.href||a.href==='#')return;
+      if(item.logoUrl){var img=document.createElement('img');img.src=safeUrl(item.logoUrl);img.alt='';img.loading='lazy';a.append(img);}
+      var t=document.createElement('h3');t.textContent=item.title||'Partner';a.append(t);
+      var foot=document.createElement('div');foot.className='card-foot';foot.textContent='Visit partner ↗';a.append(foot);partners.append(a);
+    });
+    show('partners',partners.children.length>0);
+    var contact=[];
+    if(p.contactEmail){var mail=document.createElement('a');mail.href='mailto:'+p.contactEmail;mail.className='btn';mail.textContent='Email ↗';contact.push(mail);}
+    if(safeUrl(p.contactTelegram))contact.push(link(safeUrl(p.contactTelegram),'Telegram ↗','btn secondary'));
+    $('contactLinks').textContent='';contact.forEach(function(a){$('contactLinks').append(a);});
+    show('contact',contact.length>0||socials.children.length>0);
+    $('main').hidden=false;$('loading').hidden=true;
+  };
+  $('articleSearch').addEventListener('input',function(){
+    var query=this.value.trim().toLowerCase(),cards=$('articleGrid').children,visible=0;
+    Array.prototype.forEach.call(cards,function(item){
+      var match=item.textContent.toLowerCase().indexOf(query)>=0;
+      item.hidden=!match;if(match)visible++;
+    });
+    $('articleEmpty').style.display=visible?'none':'block';
+  });
+  $('menu').addEventListener('click',function(){
+    var nav=$('nav');var open=nav.classList.toggle('open');this.setAttribute('aria-expanded',String(open));
+  });
+  fetch('/api/public/'+encodeURIComponent(slug),{headers:{Accept:'application/json'}})
+    .then(function(response){if(!response.ok)throw new Error('not-found');return response.json();})
+    .then(render)
+    .catch(function(){$('loading').hidden=true;$('error').hidden=false;});
+})();
+</script>
+</body>
+</html>
