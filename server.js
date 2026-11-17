@@ -130,7 +130,7 @@ const send = (u, ev) => {
 const usd = t => t.currency === 'KHR' ? t.amount / KHR_RATE : t.amount;
 const DEF = { spinMin: 10, timerPerUsd: 1, scareMin: 20, mediaMin: 2, pointsPerUsd: 10, tgChat: '', ytVideo: '', discordHook: '' };
 
-const profileText = (value, max) => String(value == null ? '' : value).replace(/[\\u0000-\\u001f\\u007f]/g, ' ').trim().slice(0, max);
+const profileText = (value, max) => String(value == null ? '' : value).replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, max);
 const safeProfileUrl = value => {
   const raw = profileText(value, 600);
   if (!raw) return '';
