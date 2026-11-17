@@ -5,7 +5,8 @@
   "description": "Multi-tenant live tip alerts and OBS overlays",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "test": "node --test"
   },
   "engines": {
     "node": ">=20"
