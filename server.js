@@ -113,12 +113,13 @@ const clients = {}, hits = {}, chatIds = {};
 const send = (u, ev) => {
   u.eventSeq = (u.eventSeq || 0) + 1;
   u.events = u.events || [];
-  u.events.push({ id: u.eventSeq, at: Date.now(), data: ev });
+  const event = { id: u.eventSeq, at: Date.now(), data: ev };
+  u.events.push(event);
   if (u.events.length > 200) u.events.splice(0, u.events.length - 200);
   save();
   (clients[u.alertToken] || []).forEach(r => r.write('data: ' + JSON.stringify(ev) + '\n\n'));
   if (ably) {
-    ably.channels.get(channelName(u.alertToken)).publish('event', ev)
+    ably.channels.get(channelName(u.alertToken)).publish('event', event)
       .catch(error => console.error('BotStream realtime publish failed:', error));
   }
 };
