@@ -514,7 +514,7 @@ async function app(req, res) {
         ttl: 60 * 60 * 1000
       });
       res.setHeader('Cache-Control', 'no-store');
-      return json(res, { ...tokenRequest, channel });
+      return json(res, tokenRequest);
     } catch (error) {
       console.error('BotStream room realtime token error:', error);
       return json(res, { error: 'Could not authorize live room connection.' }, 503);
