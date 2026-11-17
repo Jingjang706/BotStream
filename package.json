@@ -9,7 +9,7 @@
     "test": "node --test"
   },
   "engines": {
-    "node": ">=20"
+    "node": "22.x"
   },
   "dependencies": {
     "@upstash/redis": "^1.41.0",
