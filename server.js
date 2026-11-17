@@ -11,7 +11,14 @@ const hash = (p, s) => crypto.scryptSync(String(p), s, 32).toString('hex');
 const clients = {}, hits = {}, chatIds = {};
 const send = (u, ev) => (clients[u.alertToken] || []).forEach(r => r.write('data: ' + JSON.stringify(ev) + '\n\n'));
 const usd = t => t.currency === 'KHR' ? t.amount / KHR_RATE : t.amount;
-const DEF = { spinMin: 10, timerPerUsd: 1, scareMin: 20, mediaMin: 2, tgChat: '', ytVideo: '' };
+const DEF = { spinMin: 10, timerPerUsd: 1, scareMin: 20, mediaMin: 2, pointsPerUsd: 10, tgChat: '', ytVideo: '', discordHook: '' };
+const DEFREDEEMS = [{ id: 'r1', title: 'Jumpscare', cost: 200, kind: 'scare' }, { id: 'r2', title: 'Spin the wheel', cost: 100, kind: 'spin' }, { id: 'r3', title: 'Shoutout', cost: 50, kind: 'alert' }];
+const KINDS = ['alert', 'scare', 'spin'];
+const pts = u => (u.points = u.points || {});
+const pkey = n => String(n || '').trim().toLowerCase().slice(0, 30);
+const eq = (a, b) => { const x = Buffer.from(String(a)), y = Buffer.from(String(b)); return x.length === y.length && crypto.timingSafeEqual(x, y); };
+// A viewer proves who they are with the passcode they chose on their first matched tip.
+const acct = (u, name, pass) => { const a = pts(u)[pkey(name)]; return a && a.pass && pass && eq(hash(pass, u.salt), a.pass) ? a : null; };
 const SLICES = ['Shoutout', 'Song request', 'Ask me anything', 'Try again'];
 const cfg = u => ({ ...DEF, ...u.cfg });
 const ip = req => (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || '';
@@ -19,6 +26,7 @@ function limited(req, key, max) {
   const k = key + ip(req), now = Date.now(), h = hits[k] = (hits[k] || []).filter(t => now - t < 60000);
   h.push(now); return h.length > max;
 }
+const dc = (hook, content) => hook && /^https:\/\/(discord|discordapp)\.com\/api\/webhooks\//.test(hook) && fetch(hook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: String(content).slice(0, 1900) }) }).catch(() => {});
 const tg = (chat, text) => E.TELEGRAM_BOT_TOKEN && chat && fetch('https://api.telegram.org/bot' + E.TELEGRAM_BOT_TOKEN + '/sendMessage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: chat, text }) }).catch(() => {});
 
 function tops(u) {
@@ -27,9 +35,10 @@ function tops(u) {
   return Object.entries(by).sort((a, b) => b[1] - a[1]);
 }
 const pubPoll = u => u.poll ? { q: u.poll.q, open: u.poll.open, options: u.poll.options.map(o => ({ t: o.t, v: o.v })) } : null;
+const pubPred = u => u.pred ? { q: u.pred.q, state: u.pred.state, win: u.pred.win, options: u.pred.options.map((t, i) => ({ t, pool: u.pred.bets.filter(b => b.i === i).reduce((s, b) => s + b.amt, 0) })) } : null;
 function stats(u) {
   const raised = u.tips.reduce((s, t) => s + usd(t), 0);
-  return { type: 'stats', goal: u.goal, raised: +raised.toFixed(2), top: tops(u).slice(0, 5).map(([name, v]) => ({ name, usd: +v.toFixed(2) })), timer: u.timer || 0, poll: pubPoll(u), tts: !!E.GOOGLE_TTS_KEY, video: cfg(u).ytVideo };
+  return { type: 'stats', goal: u.goal, raised: +raised.toFixed(2), top: tops(u).slice(0, 5).map(([name, v]) => ({ name, usd: +v.toFixed(2) })), timer: u.timer || 0, poll: pubPoll(u), pred: pubPred(u), tts: !!E.GOOGLE_TTS_KEY, video: cfg(u).ytVideo };
 }
 function spin(u, title, slices) {
   slices = slices || u.wheel || SLICES;
@@ -65,10 +74,16 @@ function handleNote(u, text) {
   if (before && after === tip.name && before !== after) tip.champion = true;
   if (u.timer > now && c.timerPerUsd > 0) u.timer += Math.round(c.timerPerUsd * v * 60000);
   u.raffle = u.raffle || []; if (!u.raffle.includes(tip.name)) u.raffle.push(tip.name);
+  if (p && c.pointsPerUsd > 0 && tip.name !== 'Anonymous') {
+    const a = pts(u)[pkey(tip.name)] = pts(u)[pkey(tip.name)] || { name: tip.name, p: 0 };
+    a.p += Math.floor(v * c.pointsPerUsd); if (!a.pass && p.pass) a.pass = p.pass;
+    tip.points = a.p;
+  }
   save();
   send(u, { type: 'tip', ...tip });
   if (c.spinMin > 0 && v >= c.spinMin) spin(u, tip.name + ' spins the wheel');
   send(u, stats(u));
+  dc(c.discordHook, tip.name + ' tipped ' + (tip.currency === 'KHR' ? '៛' + tip.amount : '$' + tip.amount) + (tip.message ? ': ' + tip.message : ''));
   tg(c.tgChat, tip.name + ' tipped ' + (tip.currency === 'KHR' ? '៛' + tip.amount : '$' + tip.amount) + (tip.message ? ': ' + tip.message : ''));
   return true;
 }
@@ -98,7 +113,7 @@ const page = (res, f) => { try { res.writeHead(200, { 'Content-Type': 'text/html
 const login = (res, slug, extra) => { const t = rid(); db.sessions[t] = slug; save(); json(res, { session: t, ...extra }); };
 const adminOk = req => E.ADMIN_KEY && req.headers['x-admin-key'] === E.ADMIN_KEY;
 
-const newUser = (slug, salt) => ({ slug, name: slug, salt, pass: '', rec: '', created: Date.now(), alertToken: rid(), notifyToken: rid(), goal: { title: 'Stream goal', target: 50 }, khqr: '', tips: [], pending: [], raffle: [], cfg: {}, wheel: SLICES, timer: 0, poll: null });
+const newUser = (slug, salt) => ({ slug, name: slug, salt, pass: '', rec: '', created: Date.now(), alertToken: rid(), notifyToken: rid(), goal: { title: 'Stream goal', target: 50 }, khqr: '', tips: [], pending: [], raffle: [], cfg: {}, wheel: SLICES, timer: 0, poll: null, points: {}, redeems: DEFREDEEMS, pred: null });
 
 // Single-owner mode: set OWNER_PASSWORD and the server has one account, made from your settings. Signups are closed.
 const SINGLE = !!E.OWNER_PASSWORD, OWNER = (E.OWNER_SLUG || 'owner').toLowerCase();
@@ -152,7 +167,7 @@ http.createServer(async (req, res) => {
   }
   if (p.startsWith('/api/public/')) {
     const u = db.users[p.slice(12)];
-    return u ? json(res, { name: u.name, khqr: u.khqr, poll: pubPoll(u), mediaMin: cfg(u).mediaMin }) : json(res, { error: 'Not found' }, 404);
+    return u ? json(res, { name: u.name, khqr: u.khqr, poll: pubPoll(u), pred: pubPred(u), mediaMin: cfg(u).mediaMin, pointsPerUsd: cfg(u).pointsPerUsd, redeems: u.redeems || DEFREDEEMS }) : json(res, { error: 'Not found' }, 404);
   }
   if (p.startsWith('/api/pay/') && m === 'POST') {
     if (limited(req, 'pay', 20)) return json(res, { error: 'Too many tries. Wait a minute.' }, 429);
@@ -166,7 +181,7 @@ http.createServer(async (req, res) => {
       if (usd({ amount, currency: b.currency }) < c.mediaMin) return json(res, { error: 'Media share starts at $' + c.mediaMin + '.' }, 400);
       if (!(await videoOk(media))) return json(res, { error: 'That video can’t be played on stream. Try another one.' }, 400);
     }
-    u.pending.push({ name: String(b.name || 'Anonymous').slice(0, 30), message: String(b.message || '').slice(0, 150), amount, currency: b.currency, media, at: Date.now() });
+    u.pending.push({ name: String(b.name || 'Anonymous').slice(0, 30), message: String(b.message || '').slice(0, 150), amount, currency: b.currency, media, pass: b.passcode ? hash(String(b.passcode).slice(0, 40), u.salt) : '', at: Date.now() });
     u.pending = u.pending.slice(-50); save();
     return json(res, { ok: true });
   }
@@ -177,6 +192,35 @@ http.createServer(async (req, res) => {
     const who = crypto.createHash('sha256').update(ip(req) + pl.id).digest('hex').slice(0, 16);
     if (pl.voters.includes(who)) return json(res, { error: 'You already voted.' }, 409);
     pl.voters.push(who); o.v++; save(); send(u, stats(u)); return json(res, { ok: true });
+  }
+  if (p.startsWith('/api/points/') && m === 'POST') {
+    if (limited(req, 'points', 30)) return json(res, { error: 'Too many tries.' }, 429);
+    const u = db.users[p.slice(12)], a = u && acct(u, b.name, b.passcode);
+    return a ? json(res, { points: a.p, name: a.name }) : json(res, { error: 'Wrong name or passcode. Your passcode is set with your first paid tip.' }, 401);
+  }
+  if (p.startsWith('/api/redeem/') && m === 'POST') {
+    if (limited(req, 'redeem', 20)) return json(res, { error: 'Too many tries.' }, 429);
+    const u = db.users[p.slice(12)], a = u && acct(u, b.name, b.passcode);
+    if (!a) return json(res, { error: 'Wrong name or passcode.' }, 401);
+    const r = (u.redeems || DEFREDEEMS).find(x => x.id === b.id);
+    if (!r) return json(res, { error: 'That redeem does not exist.' }, 400);
+    if (a.p < r.cost) return json(res, { error: 'Not enough points. You have ' + a.p + ', this costs ' + r.cost + '.' }, 400);
+    a.p -= r.cost; save();
+    send(u, { type: 'redeem', name: a.name, title: r.title, kind: r.kind, message: String(b.message || '').slice(0, 150) });
+    if (r.kind === 'spin') spin(u, a.name + ' redeemed ' + r.title);
+    return json(res, { ok: true, points: a.p });
+  }
+  if (p.startsWith('/api/bet/') && m === 'POST') {
+    if (limited(req, 'bet', 30)) return json(res, { error: 'Too many tries.' }, 429);
+    const u = db.users[p.slice(9)], a = u && acct(u, b.name, b.passcode), pr = u && u.pred, amt = Math.floor(+b.amount), i = Math.floor(+b.i);
+    if (!a) return json(res, { error: 'Wrong name or passcode.' }, 401);
+    if (!pr || pr.state !== 'open') return json(res, { error: 'Betting is closed.' }, 400);
+    if (!(i >= 0 && i < pr.options.length) || !(amt >= 1)) return json(res, { error: 'Pick an outcome and an amount.' }, 400);
+    if (amt > a.p) return json(res, { error: 'You only have ' + a.p + ' points.' }, 400);
+    const k = pkey(a.name), prev = pr.bets.find(x => x.k === k);
+    if (prev && prev.i !== i) return json(res, { error: 'You already bet on a different outcome.' }, 400);
+    a.p -= amt; if (prev) prev.amt += amt; else pr.bets.push({ k, i, amt });
+    save(); send(u, stats(u)); return json(res, { ok: true, points: a.p });
   }
   if (p.startsWith('/api/notify/') && m === 'POST') {
     if (limited(req, 'notify', 60)) return json(res, { error: 'Too many requests.' }, 429);
@@ -213,18 +257,20 @@ http.createServer(async (req, res) => {
 
   const u = authUser(req);
   if (p.startsWith('/api/') && !u) return json(res, { error: 'Please log in.' }, 401);
-  if (p === '/api/backup') { const { pass, salt, rec, ...rest } = u; return json(res, rest); }
-  if (p === '/api/me') return json(res, { slug: u.slug, name: u.name, khqr: u.khqr, goal: u.goal, cfg: cfg(u), wheel: u.wheel || SLICES, raffle: (u.raffle || []).length, alertToken: u.alertToken, notifyToken: u.notifyToken, tips: u.tips.slice(-15).reverse(), stats: stats(u), tgReady: !!E.TELEGRAM_BOT_TOKEN, ytReady: !!E.YOUTUBE_API_KEY });
+  if (p === '/api/backup') { const { pass, salt, rec, ...rest } = u; rest.points = Object.fromEntries(Object.entries(pts(u)).map(([k, a]) => [k, { name: a.name, p: a.p }])); return json(res, rest); }
+  if (p === '/api/me') return json(res, { slug: u.slug, name: u.name, khqr: u.khqr, goal: u.goal, cfg: cfg(u), wheel: u.wheel || SLICES, raffle: (u.raffle || []).length, alertToken: u.alertToken, notifyToken: u.notifyToken, tips: u.tips.slice(-15).reverse(), stats: stats(u), redeems: u.redeems || DEFREDEEMS, players: Object.keys(pts(u)).length, tgReady: !!E.TELEGRAM_BOT_TOKEN, ytReady: !!E.YOUTUBE_API_KEY });
   if (p === '/api/settings' && m === 'POST') {
     if (b.name) u.name = String(b.name).slice(0, 30);
     if (typeof b.khqr === 'string' && b.khqr.length < 2.5e6) u.khqr = b.khqr;
     if (b.goal) u.goal = { title: String(b.goal.title || 'Stream goal').slice(0, 40), target: Math.max(1, +b.goal.target || 50) };
     if (b.cfg) {
       const c = {};
-      for (const k of ['spinMin', 'timerPerUsd', 'scareMin', 'mediaMin']) if (b.cfg[k] !== undefined) c[k] = Math.max(0, +b.cfg[k] || 0);
+      for (const k of ['spinMin', 'timerPerUsd', 'scareMin', 'mediaMin', 'pointsPerUsd']) if (b.cfg[k] !== undefined) c[k] = Math.max(0, +b.cfg[k] || 0);
       for (const k of ['tgChat', 'ytVideo']) if (typeof b.cfg[k] === 'string') c[k] = b.cfg[k].trim().slice(0, 60);
+      if (typeof b.cfg.discordHook === 'string') { const h = b.cfg.discordHook.trim().slice(0, 200); c.discordHook = !h || /^https:\/\/(discord|discordapp)\.com\/api\/webhooks\//.test(h) ? h : u.cfg.discordHook || ''; }
       u.cfg = { ...u.cfg, ...c };
     }
+    if (Array.isArray(b.redeems)) u.redeems = b.redeems.map(r => ({ title: String(r.title || '').trim().slice(0, 30), cost: Math.max(1, Math.floor(+r.cost) || 0), kind: KINDS.includes(r.kind) ? r.kind : 'alert' })).filter(r => r.title && r.cost).slice(0, 8).map((r, i) => ({ id: 'r' + (i + 1), ...r }));
     if (Array.isArray(b.wheel)) { const w = b.wheel.map(s => String(s).trim().slice(0, 24)).filter(Boolean).slice(0, 12); if (w.length >= 2) u.wheel = w; }
     save(); send(u, stats(u)); return json(res, { ok: true });
   }
@@ -239,6 +285,20 @@ http.createServer(async (req, res) => {
     else return json(res, { error: 'Add a question and at least two options.' }, 400);
     save(); send(u, stats(u)); return json(res, { ok: true });
   }
+  if (p === '/api/predict' && m === 'POST') {
+    const pr = u.pred, refund = () => pr.bets.forEach(x => { const a = pts(u)[x.k]; if (a) a.p += x.amt; });
+    if (b.action === 'clear') u.pred = null;
+    else if (b.action === 'lock' && pr && pr.state === 'open') pr.state = 'locked';
+    else if (b.action === 'cancel' && pr && pr.state !== 'done') { refund(); pr.state = 'done'; pr.win = -1; }
+    else if (b.action === 'resolve' && pr && pr.state !== 'done' && pr.options[+b.win] !== undefined) {
+      const w = +b.win, total = pr.bets.reduce((s, x) => s + x.amt, 0), winPool = pr.bets.filter(x => x.i === w).reduce((s, x) => s + x.amt, 0);
+      if (!winPool) refund(); else pr.bets.filter(x => x.i === w).forEach(x => { const a = pts(u)[x.k]; if (a) a.p += Math.floor(x.amt / winPool * total); });
+      pr.state = 'done'; pr.win = w;
+    }
+    else if (b.q && Array.isArray(b.options) && b.options.map(s => String(s).trim()).filter(Boolean).length >= 2) u.pred = { id: rid(), q: String(b.q).slice(0, 80), state: 'open', win: null, bets: [], options: b.options.map(s => String(s).trim().slice(0, 30)).filter(Boolean).slice(0, 3) };
+    else return json(res, { error: 'Add a question and 2 or 3 outcomes.' }, 400);
+    save(); send(u, stats(u)); return json(res, { ok: true });
+  }
   if (p === '/api/raffle' && m === 'POST') {
     u.raffle = u.raffle || [];
     if (b.action === 'clear') { u.raffle = []; save(); return json(res, { ok: true, entries: 0 }); }
@@ -246,8 +306,10 @@ http.createServer(async (req, res) => {
     spin(u, 'Raffle winner', u.raffle.slice(-12)); return json(res, { ok: true, entries: u.raffle.length });
   }
   if (p === '/api/announce' && m === 'POST') {
-    const c = cfg(u); if (!E.TELEGRAM_BOT_TOKEN || !c.tgChat) return json(res, { error: 'Set TELEGRAM_BOT_TOKEN on the server and a Telegram chat ID in settings.' }, 400);
-    tg(c.tgChat, String(b.text || (u.name + ' is live! Tip page: ' + (b.origin || '') + '/pay/' + u.slug))); return json(res, { ok: true });
+    const c = cfg(u), tgOk = E.TELEGRAM_BOT_TOKEN && c.tgChat;
+    if (!tgOk && !c.discordHook) return json(res, { error: 'Add a Discord webhook in settings, or set TELEGRAM_BOT_TOKEN on the server plus a Telegram chat ID.' }, 400);
+    const text = String(b.text || (u.name + ' is live! Tip page: ' + (b.origin || '') + '/pay/' + u.slug));
+    tg(c.tgChat, text); dc(c.discordHook, text); return json(res, { ok: true });
   }
   res.writeHead(404); res.end('Not found');
 }).listen(PORT, () => console.log('LiveTip KH running on http://localhost:' + PORT));
