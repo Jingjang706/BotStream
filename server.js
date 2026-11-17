@@ -138,9 +138,24 @@ const acct = (u, name, pass) => { const a = pts(u)[pkey(name)]; return a && a.pa
 const SLICES = ['Shoutout', 'Song request', 'Ask me anything', 'Try again'];
 const cfg = u => ({ ...DEF, ...u.cfg });
 const ip = req => (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || '';
-function limited(req, key, max) {
-  const k = key + ip(req), now = Date.now(), h = hits[k] = (hits[k] || []).filter(t => now - t < 60000);
-  h.push(now); return h.length > max;
+async function limited(req, key, max) {
+  const now = Date.now(), identity = ip(req);
+  if (VERCEL) {
+    const bucket = PREFIX + ':v1:rate:' + key + ':' +
+      crypto.createHash('sha256').update(identity).digest('hex');
+    const count = await REDIS.eval(
+      "redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', ARGV[1]); " +
+      "local n = redis.call('ZCARD', KEYS[1]); " +
+      "if n >= tonumber(ARGV[2]) then return n + 1 end; " +
+      "redis.call('ZADD', KEYS[1], ARGV[3], ARGV[4]); " +
+      "redis.call('PEXPIRE', KEYS[1], 60000); return n + 1",
+      [bucket], [now - 60000, max, now, now + ':' + rid()]
+    );
+    return Number(count) > max;
+  }
+  const k = key + identity, h = hits[k] = (hits[k] || []).filter(t => now - t < 60000);
+  h.push(now);
+  return h.length > max;
 }
 const dc = (hook, content) => hook && /^https:\/\/(discord|discordapp)\.com\/api\/webhooks\//.test(hook) && fetch(hook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: String(content).slice(0, 1900) }) }).catch(() => {});
 const tg = (chat, text) => E.TELEGRAM_BOT_TOKEN && chat && fetch('https://api.telegram.org/bot' + E.TELEGRAM_BOT_TOKEN + '/sendMessage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: chat, text }) }).catch(() => {});
@@ -264,6 +279,7 @@ async function app(req, res) {
   let b = {};
   if (req.body && typeof req.body === 'object' && !Buffer.isBuffer(req.body)) b = req.body;
   else { try { b = JSON.parse(raw); } catch {} }
+  if (Buffer.byteLength(raw) > 3e6) return json(res, { error: 'Request body is too large.' }, 413);
 
   if (p === '/healthz') { res.writeHead(200); return res.end('ok'); }
   if (p === '/api/config') return json(res, { single: SINGLE });
@@ -278,7 +294,7 @@ async function app(req, res) {
 
   if (p === '/api/register' && m === 'POST') {
     if (SINGLE) return json(res, { error: 'Registration is closed.' }, 403);
-    if (limited(req, 'reg', 5)) return json(res, { error: 'Too many tries. Wait a minute.' }, 429);
+    if (await limited(req, 'reg', 5)) return json(res, { error: 'Too many tries. Wait a minute.' }, 429);
     const slug = String(b.slug || '').toLowerCase();
     if (!/^[a-z0-9_]{3,20}$/.test(slug) || String(b.password || '').length < 6) return json(res, { error: 'Username: 3 to 20 letters or numbers. Password: at least 6 characters.' }, 400);
     if (db.users[slug]) return json(res, { error: 'That username is taken.' }, 409);
@@ -287,14 +303,14 @@ async function app(req, res) {
     return login(res, slug, { recovery: rec });
   }
   if (p === '/api/login' && m === 'POST') {
-    if (limited(req, 'login', 10)) return json(res, { error: 'Too many tries. Wait a minute.' }, 429);
+    if (await limited(req, 'login', 10)) return json(res, { error: 'Too many tries. Wait a minute.' }, 429);
     const u = db.users[String(b.slug || '').toLowerCase()];
     if (!u || hash(b.password, u.salt) !== u.pass) return json(res, { error: 'Wrong username or password.' }, 401);
     return login(res, u.slug);
   }
   if (p === '/api/reset' && m === 'POST') {
     if (SINGLE) return json(res, { error: 'To reset, change OWNER_PASSWORD on the server and restart.' }, 403);
-    if (limited(req, 'reset', 5)) return json(res, { error: 'Too many tries. Wait a minute.' }, 429);
+    if (await limited(req, 'reset', 5)) return json(res, { error: 'Too many tries. Wait a minute.' }, 429);
     const u = db.users[String(b.slug || '').toLowerCase()];
     if (!u || String(b.password || '').length < 6 || hash(b.recovery, u.salt) !== u.rec) return json(res, { error: 'Recovery code or password is not valid.' }, 401);
     u.pass = hash(b.password, u.salt); return login(res, u.slug);
@@ -304,7 +320,7 @@ async function app(req, res) {
     return u ? json(res, { name: u.name, khqr: u.khqr, poll: pubPoll(u), pred: pubPred(u), mediaMin: cfg(u).mediaMin, pointsPerUsd: cfg(u).pointsPerUsd, redeems: u.redeems || DEFREDEEMS }) : json(res, { error: 'Not found' }, 404);
   }
   if (p.startsWith('/api/pay/') && m === 'POST') {
-    if (limited(req, 'pay', 20)) return json(res, { error: 'Too many tries. Wait a minute.' }, 429);
+    if (await limited(req, 'pay', 20)) return json(res, { error: 'Too many tries. Wait a minute.' }, 429);
     const u = db.users[p.slice(9)], amount = +b.amount;
     if (!u || !(amount > 0) || !['USD', 'KHR'].includes(b.currency)) return json(res, { error: 'Check the amount.' }, 400);
     let media;
@@ -320,7 +336,7 @@ async function app(req, res) {
     return json(res, { ok: true });
   }
   if (p.startsWith('/api/vote/') && m === 'POST') {
-    if (limited(req, 'vote', 30)) return json(res, { error: 'Too many tries.' }, 429);
+    if (await limited(req, 'vote', 30)) return json(res, { error: 'Too many tries.' }, 429);
     const u = db.users[p.slice(10)], pl = u && u.poll, o = pl && pl.options[+b.i];
     if (!pl || !pl.open || !o) return json(res, { error: 'Voting is closed.' }, 400);
     const who = crypto.createHash('sha256').update(ip(req) + pl.id).digest('hex').slice(0, 16);
@@ -328,12 +344,12 @@ async function app(req, res) {
     pl.voters.push(who); o.v++; save(); send(u, stats(u)); return json(res, { ok: true });
   }
   if (p.startsWith('/api/points/') && m === 'POST') {
-    if (limited(req, 'points', 30)) return json(res, { error: 'Too many tries.' }, 429);
+    if (await limited(req, 'points', 30)) return json(res, { error: 'Too many tries.' }, 429);
     const u = db.users[p.slice(12)], a = u && acct(u, b.name, b.passcode);
     return a ? json(res, { points: a.p, name: a.name }) : json(res, { error: 'Wrong name or passcode. Your passcode is set with your first paid tip.' }, 401);
   }
   if (p.startsWith('/api/redeem/') && m === 'POST') {
-    if (limited(req, 'redeem', 20)) return json(res, { error: 'Too many tries.' }, 429);
+    if (await limited(req, 'redeem', 20)) return json(res, { error: 'Too many tries.' }, 429);
     const u = db.users[p.slice(12)], a = u && acct(u, b.name, b.passcode);
     if (!a) return json(res, { error: 'Wrong name or passcode.' }, 401);
     const r = (u.redeems || DEFREDEEMS).find(x => x.id === b.id);
@@ -345,7 +361,7 @@ async function app(req, res) {
     return json(res, { ok: true, points: a.p });
   }
   if (p.startsWith('/api/bet/') && m === 'POST') {
-    if (limited(req, 'bet', 30)) return json(res, { error: 'Too many tries.' }, 429);
+    if (await limited(req, 'bet', 30)) return json(res, { error: 'Too many tries.' }, 429);
     const u = db.users[p.slice(9)], a = u && acct(u, b.name, b.passcode), pr = u && u.pred, amt = Math.floor(+b.amount), i = Math.floor(+b.i);
     if (!a) return json(res, { error: 'Wrong name or passcode.' }, 401);
     if (!pr || pr.state !== 'open') return json(res, { error: 'Betting is closed.' }, 400);
@@ -357,7 +373,7 @@ async function app(req, res) {
     save(); send(u, stats(u)); return json(res, { ok: true, points: a.p });
   }
   if (p.startsWith('/api/notify/') && m === 'POST') {
-    if (limited(req, 'notify', 60)) return json(res, { error: 'Too many requests.' }, 429);
+    if (await limited(req, 'notify', 60)) return json(res, { error: 'Too many requests.' }, 429);
     const u = byToken('notifyToken', p.slice(12));
     if (!u) return json(res, { error: 'Bad token' }, 404);
     return json(res, { matched: handleNote(u, String(b.text || b.message || raw)) });
@@ -367,7 +383,7 @@ async function app(req, res) {
     if (!owner || !ably) return json(res, { error: 'Realtime is not configured.' }, 501);
     try {
       const tokenRequest = await ably.auth.createTokenRequest({
-        clientId: 'overlay-' + owner.alertToken.slice(0, 12),
+        clientId: 'overlay-' + rid(),
         capability: { [channelName(owner.alertToken)]: ['subscribe'] },
         ttl: 60 * 60 * 1000
       });
