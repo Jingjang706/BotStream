@@ -16,7 +16,7 @@ async function go() {
     const tr = document.createElement('tr');
     [u.slug, new Date(u.created).toLocaleDateString(), u.tips, u.raised].forEach(v => { const td = document.createElement('td'); td.textContent = v; tr.appendChild(td); });
     const td = document.createElement('td'), b = document.createElement('button'); b.textContent = 'Delete';
-    b.onclick = async () => { if (confirm('Delete ' + u.slug + ' and all their data?')) { await fetch('/api/admin/delete', { method: 'POST', headers: { 'x-admin-key': $('k').value }, body: JSON.stringify({ slug: u.slug }) }); go(); } };
+    b.onclick = async () => { if (confirm('Delete ' + u.slug + ' and all their data?')) { await fetch('/api/admin/delete', { method: 'POST', headers: { 'x-admin-key': $('k').value, 'Content-Type': 'application/json' }, body: JSON.stringify({ slug: u.slug }) }); go(); } };
     td.appendChild(b); tr.appendChild(td); $('b').appendChild(tr);
   });
 }

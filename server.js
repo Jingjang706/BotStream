@@ -25,7 +25,7 @@ const save = () => {
 };
 
 const REDIS = VERCEL ? require('@upstash/redis').Redis.fromEnv() : null;
-const PREFIX = String(E.BOTSTREAM_NAMESPACE || 'botstream:production').replace(/[^a-zA-Z0-9:_-]/g, '').slice(0, 80);
+const PREFIX = String(E.BOTSTREAM_NAMESPACE || ('botstream:' + (VERCEL ? (E.VERCEL_ENV || 'preview') : 'local'))).replace(/[^a-zA-Z0-9:_-]/g, '').slice(0, 80);
 const REDIS_USERS = PREFIX + ':v1:users';
 const REDIS_SESSIONS = PREFIX + ':v1:sessions';
 const REDIS_LOCK = PREFIX + ':v1:write-lock';
