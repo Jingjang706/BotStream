@@ -129,6 +129,57 @@ const send = (u, ev) => {
 };
 const usd = t => t.currency === 'KHR' ? t.amount / KHR_RATE : t.amount;
 const DEF = { spinMin: 10, timerPerUsd: 1, scareMin: 20, mediaMin: 2, pointsPerUsd: 10, tgChat: '', ytVideo: '', discordHook: '' };
+
+const profileText = (value, max) => String(value == null ? '' : value).replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, max);
+const safeProfileUrl = value => {
+  const raw = profileText(value, 600);
+  if (!raw) return '';
+  try {
+    const url = new URL(raw);
+    return ['http:', 'https:'].includes(url.protocol) ? url.href : '';
+  } catch { return ''; }
+};
+function cleanProfile(input) {
+  const p = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
+  const rows = (items, kind) => (Array.isArray(items) ? items : []).slice(0, 12).map(item => {
+    const row = item && typeof item === 'object' && !Array.isArray(item) ? item : {};
+    const title = profileText(row.title || row.label || row.name, 80);
+    const url = safeProfileUrl(row.url);
+    if (!title || !url) return null;
+    const clean = { title, url };
+    if (kind === 'videos') clean.description = profileText(row.description, 180);
+    if (kind === 'articles') {
+      clean.excerpt = profileText(row.excerpt || row.description, 220);
+      clean.category = profileText(row.category, 40);
+      clean.date = profileText(row.date, 30);
+    }
+    if (kind === 'communities') clean.description = profileText(row.description, 180);
+    if (kind === 'partners') clean.logoUrl = safeProfileUrl(row.logoUrl);
+    return clean;
+  }).filter(Boolean);
+  const email = profileText(p.contactEmail, 160);
+  return {
+    title: profileText(p.title, 60),
+    tagline: profileText(p.tagline, 140),
+    bio: profileText(p.bio, 1800),
+    location: profileText(p.location, 80),
+    avatarUrl: safeProfileUrl(p.avatarUrl),
+    coverUrl: safeProfileUrl(p.coverUrl),
+    theme: /^#[0-9a-f]{6}$/i.test(String(p.theme || '')) ? String(p.theme) : '#f05b78',
+    schedule: profileText(p.schedule, 240),
+    quote: profileText(p.quote, 180),
+    metrics: (Array.isArray(p.metrics) ? p.metrics : []).slice(0, 4).map(item => ({ label: profileText(item && item.label, 24), value: profileText(item && item.value, 32) })).filter(item => item.label && item.value),
+    isLive: p.isLive === true,
+    liveUrl: safeProfileUrl(p.liveUrl),
+    contactEmail: /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email) ? email : '',
+    contactTelegram: safeProfileUrl(p.contactTelegram),
+    socials: rows(p.socials, 'socials'),
+    videos: rows(p.videos, 'videos'),
+    articles: rows(p.articles, 'articles'),
+    communities: rows(p.communities, 'communities'),
+    partners: rows(p.partners, 'partners')
+  };
+}
 const DEFREDEEMS = [{ id: 'r1', title: 'Jumpscare', cost: 200, kind: 'scare' }, { id: 'r2', title: 'Spin the wheel', cost: 100, kind: 'spin' }, { id: 'r3', title: 'Shoutout', cost: 50, kind: 'alert' }];
 const KINDS = ['alert', 'scare', 'spin'];
 const pts = u => (u.points = u.points || {});
@@ -245,7 +296,7 @@ const page = (res, f) => { try { res.writeHead(200, { 'Content-Type': 'text/html
 const login = (res, slug, extra) => { const t = rid(); db.sessions[t] = slug; save(); json(res, { session: t, ...extra }); };
 const adminOk = req => E.ADMIN_KEY && req.headers['x-admin-key'] === E.ADMIN_KEY;
 
-const newUser = (slug, salt) => ({ slug, name: slug, salt, pass: '', rec: '', created: Date.now(), alertToken: rid(), notifyToken: rid(), goal: { title: 'Stream goal', target: 50 }, khqr: '', tips: [], pending: [], raffle: [], cfg: {}, wheel: SLICES, timer: 0, poll: null, points: {}, redeems: DEFREDEEMS, pred: null });
+const newUser = (slug, salt) => ({ slug, name: slug, salt, pass: '', rec: '', created: Date.now(), alertToken: rid(), notifyToken: rid(), goal: { title: 'Stream goal', target: 50 }, profile: cleanProfile({}), khqr: '', tips: [], pending: [], raffle: [], cfg: {}, wheel: SLICES, timer: 0, poll: null, points: {}, redeems: DEFREDEEMS, pred: null });
 
 // Single-owner mode: set OWNER_PASSWORD and the server has one account, made from your settings. Signups are closed.
 const SINGLE = !!E.OWNER_PASSWORD, OWNER = (E.OWNER_SLUG || 'owner').toLowerCase();
@@ -289,6 +340,7 @@ async function app(req, res) {
     return page(res, 'index.html');
   }
   if (p === '/app') return page(res, 'app.html');
+  if (p.startsWith('/creator/')) return page(res, 'creator.html');
   if (p === '/overlay') return page(res, 'overlay.html');
   if (p === '/admin') return page(res, 'admin.html');
   if (p.startsWith('/pay/')) return page(res, 'pay.html');
@@ -318,7 +370,7 @@ async function app(req, res) {
   }
   if (p.startsWith('/api/public/')) {
     const u = db.users[p.slice(12)];
-    return u ? json(res, { name: u.name, khqr: u.khqr, poll: pubPoll(u), pred: pubPred(u), mediaMin: cfg(u).mediaMin, pointsPerUsd: cfg(u).pointsPerUsd, redeems: u.redeems || DEFREDEEMS }) : json(res, { error: 'Not found' }, 404);
+    return u ? json(res, { name: u.name, khqr: u.khqr, profile: cleanProfile(u.profile), poll: pubPoll(u), pred: pubPred(u), mediaMin: cfg(u).mediaMin, pointsPerUsd: cfg(u).pointsPerUsd, redeems: u.redeems || DEFREDEEMS }) : json(res, { error: 'Not found' }, 404);
   }
   if (p.startsWith('/api/pay/') && m === 'POST') {
     if (await limited(req, 'pay', 20)) return json(res, { error: 'Too many tries. Wait a minute.' }, 429);
@@ -429,8 +481,9 @@ async function app(req, res) {
   const u = authUser(req);
   if (p.startsWith('/api/') && !u) return json(res, { error: 'Please log in.' }, 401);
   if (p === '/api/backup') { const { pass, salt, rec, ...rest } = u; rest.points = Object.fromEntries(Object.entries(pts(u)).map(([k, a]) => [k, { name: a.name, p: a.p }])); return json(res, rest); }
-  if (p === '/api/me') return json(res, { slug: u.slug, name: u.name, khqr: u.khqr, goal: u.goal, cfg: cfg(u), wheel: u.wheel || SLICES, raffle: (u.raffle || []).length, alertToken: u.alertToken, notifyToken: u.notifyToken, tips: u.tips.slice(-15).reverse(), stats: stats(u), redeems: u.redeems || DEFREDEEMS, players: Object.keys(pts(u)).length, tgReady: !!E.TELEGRAM_BOT_TOKEN, ytReady: !!E.YOUTUBE_API_KEY });
+  if (p === '/api/me') return json(res, { slug: u.slug, name: u.name, profile: cleanProfile(u.profile), khqr: u.khqr, goal: u.goal, cfg: cfg(u), wheel: u.wheel || SLICES, raffle: (u.raffle || []).length, alertToken: u.alertToken, notifyToken: u.notifyToken, tips: u.tips.slice(-15).reverse(), stats: stats(u), redeems: u.redeems || DEFREDEEMS, players: Object.keys(pts(u)).length, tgReady: !!E.TELEGRAM_BOT_TOKEN, ytReady: !!E.YOUTUBE_API_KEY });
   if (p === '/api/settings' && m === 'POST') {
+    if (b.profile && typeof b.profile === 'object') u.profile = cleanProfile(b.profile);
     if (b.name) u.name = String(b.name).slice(0, 30);
     if (typeof b.khqr === 'string' && b.khqr.length < 2.5e6) u.khqr = b.khqr;
     if (b.goal) u.goal = { title: String(b.goal.title || 'Stream goal').slice(0, 40), target: Math.max(1, +b.goal.target || 50) };

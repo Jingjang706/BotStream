@@ -83,6 +83,36 @@ test('creator registration, tip matching, overlay events, and disk persistence',
   assert.ok(me.alertToken);
   assert.ok(me.notifyToken);
 
+  const profile = {
+    title: 'Test Creator',
+    tagline: 'Streaming from Cambodia',
+    quote: 'Create with purpose.',
+    metrics: [{ label: 'YouTube', value: '10K+' }],
+    bio: 'A creator profile test.',
+    location: 'Cambodia',
+    theme: '#123456',
+    socials: [{ title: 'YouTube', url: 'https://youtube.com/@testcreator' }],
+    videos: [{ title: 'Latest stream', description: 'A test video', url: 'https://youtu.be/abcdefghijk' }],
+    articles: [{ title: 'News', excerpt: 'A test update', url: 'https://example.com/news' }],
+    communities: [{ title: 'Discord', description: 'Join us', url: 'https://discord.gg/example' }],
+    partners: [{ title: 'Partner', url: 'https://example.com' }],
+    isLive: true,
+    liveUrl: 'https://youtube.com/@testcreator/live'
+  };
+  const { response: profileSaveResponse, data: profileSaved } = await postJson(base + '/api/settings', { profile }, auth);
+  assert.equal(profileSaveResponse.status, 200);
+  assert.equal(profileSaved.ok, true);
+  const publicProfileResponse = await fetch(base + '/api/public/testcreator');
+  assert.equal(publicProfileResponse.status, 200);
+  const publicProfile = await publicProfileResponse.json();
+  assert.equal(publicProfile.profile.title, 'Test Creator');
+  assert.equal(publicProfile.profile.quote, 'Create with purpose.');
+  assert.equal(publicProfile.profile.metrics[0].value, '10K+');
+  assert.equal(publicProfile.profile.socials[0].title, 'YouTube');
+  assert.equal(publicProfile.profile.videos[0].title, 'Latest stream');
+  assert.equal(publicProfile.profile.isLive, true);
+  assert.equal(publicProfile.profile.liveUrl, 'https://youtube.com/@testcreator/live');
+
   const { response: pendingResponse, data: pending } = await postJson(base + '/api/pay/testcreator', {
     name: 'Stream Supporter',
     amount: 4.5,
