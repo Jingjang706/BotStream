@@ -119,8 +119,11 @@ const send = (u, ev) => {
   save();
   (clients[u.alertToken] || []).forEach(r => r.write('data: ' + JSON.stringify(ev) + '\n\n'));
   if (ably) {
-    ably.channels.get(channelName(u.alertToken)).publish('event', event)
+    const pending = ably.channels.get(channelName(u.alertToken)).publish('event', event)
       .catch(error => console.error('BotStream realtime publish failed:', error));
+    const state = currentDb();
+    state.__pendingPublishes = state.__pendingPublishes || [];
+    state.__pendingPublishes.push(pending);
   }
 };
 const usd = t => t.currency === 'KHR' ? t.amount / KHR_RATE : t.amount;
@@ -499,6 +502,9 @@ async function handleRequest(req, res) {
         finishPromise = (async () => {
           let finalArgs = args;
           try {
+            if (state.__pendingPublishes && state.__pendingPublishes.length) {
+              await Promise.all(state.__pendingPublishes);
+            }
             if (state.__dirty) await persistRedisDb(state, before);
           } catch (error) {
             console.error('BotStream storage write failed:', error);
