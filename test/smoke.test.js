@@ -86,6 +86,8 @@ test('creator registration, tip matching, overlay events, and disk persistence',
   const profile = {
     title: 'Test Creator',
     tagline: 'Streaming from Cambodia',
+    quote: 'Create with purpose.',
+    metrics: [{ label: 'YouTube', value: '10K+' }],
     bio: 'A creator profile test.',
     location: 'Cambodia',
     theme: '#123456',
@@ -104,6 +106,8 @@ test('creator registration, tip matching, overlay events, and disk persistence',
   assert.equal(publicProfileResponse.status, 200);
   const publicProfile = await publicProfileResponse.json();
   assert.equal(publicProfile.profile.title, 'Test Creator');
+  assert.equal(publicProfile.profile.quote, 'Create with purpose.');
+  assert.equal(publicProfile.profile.metrics[0].value, '10K+');
   assert.equal(publicProfile.profile.socials[0].title, 'YouTube');
   assert.equal(publicProfile.profile.videos[0].title, 'Latest stream');
   assert.equal(publicProfile.profile.isLive, true);
