@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="km"><head><meta charset="utf-8"><title>Overlay</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Khmer:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdn.ably.com/lib/ably.min-2.js"></script>
 <style>
 html,body{margin:0;height:100%;overflow:hidden;background:transparent;font:700 30px "Noto Sans Khmer",system-ui,sans-serif;color:#fff;text-shadow:0 2px 6px #000b}
 [hidden]{display:none!important}
@@ -120,9 +121,9 @@ function handleEvent(d) {
   if (d.type === 'stats') stats(d);
 }
 
-// Serverless hosts do not keep a request open for EventSource. Poll the durable
-// event cursor instead so every Vercel instance sees the same events.
-let eventCursor = null, pollDelay = 2000;
+// Ably provides the live browser connection on Vercel. Redis polling remains
+// as a low-frequency recovery path and as a no-extra-service local fallback.
+let eventCursor = null, pollDelay = 2500, realtimeConnected = false;
 async function pollEvents() {
   try {
     const suffix = eventCursor === null ? '' : '?since=' + encodeURIComponent(eventCursor);
@@ -132,15 +133,43 @@ async function pollEvents() {
     if (eventCursor === null) {
       eventCursor = Number(payload.cursor || 0); // do not replay alerts from before this overlay opened
     } else {
-      for (const event of payload.events || []) handleEvent(event.data);
+      for (const event of payload.events || []) {
+        if (event.id > eventCursor) {
+          handleEvent(event.data);
+          eventCursor = event.id;
+        }
+      }
       eventCursor = Math.max(eventCursor, Number(payload.cursor || 0));
     }
     if (payload.stats) stats(payload.stats);
-    pollDelay = 2000;
+    pollDelay = realtimeConnected ? 15000 : 2500;
   } catch {
+    realtimeConnected = false;
     pollDelay = Math.min(15000, Math.round(pollDelay * 1.7));
   }
   setTimeout(pollEvents, pollDelay);
 }
-pollEvents();
+async function startRealtime() {
+  await pollEvents();
+  if (!window.Ably) return;
+  try {
+    const realtime = new Ably.Realtime({
+      authUrl: '/api/ably-token?token=' + encodeURIComponent(token),
+      authMethod: 'GET'
+    });
+    realtime.connection.on('connected', () => { realtimeConnected = true; pollDelay = 15000; });
+    realtime.connection.on('disconnected', () => { realtimeConnected = false; pollDelay = 2500; });
+    realtime.connection.on('failed', () => { realtimeConnected = false; pollDelay = 2500; });
+    const channel = realtime.channels.get('botstream:' + token);
+    channel.subscribe('event', message => {
+      const event = message.data;
+      if (!event || typeof event.id !== 'number' || event.id <= (eventCursor || 0)) return;
+      handleEvent(event.data);
+      eventCursor = event.id;
+    });
+  } catch {
+    realtimeConnected = false;
+  }
+}
+startRealtime();
 </script></body></html>
