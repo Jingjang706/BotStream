@@ -5,6 +5,9 @@ const http = require('http'), fs = require('fs'), path = require('path'), crypto
 const { AsyncLocalStorage } = require('async_hooks');
 const E = process.env, PORT = E.PORT || 3000, DB = E.DB_FILE || 'data.json', KHR_RATE = 4000;
 const VERCEL = !!E.VERCEL;
+const Ably = VERCEL && E.ABLY_API_KEY ? require('ably/promises') : null;
+const ably = Ably ? new Ably.Rest(E.ABLY_API_KEY) : null;
+const channelName = token => 'botstream:' + token;
 const requestContext = new AsyncLocalStorage();
 let localDb = { users: {}, sessions: {} };
 if (!VERCEL) {
@@ -114,6 +117,10 @@ const send = (u, ev) => {
   if (u.events.length > 200) u.events.splice(0, u.events.length - 200);
   save();
   (clients[u.alertToken] || []).forEach(r => r.write('data: ' + JSON.stringify(ev) + '\n\n'));
+  if (ably) {
+    ably.channels.get(channelName(u.alertToken)).publish('event', ev)
+      .catch(error => console.error('BotStream realtime publish failed:', error));
+  }
 };
 const usd = t => t.currency === 'KHR' ? t.amount / KHR_RATE : t.amount;
 const DEF = { spinMin: 10, timerPerUsd: 1, scareMin: 20, mediaMin: 2, pointsPerUsd: 10, tgChat: '', ytVideo: '', discordHook: '' };
@@ -345,6 +352,23 @@ async function app(req, res) {
     if (!u) return json(res, { error: 'Bad token' }, 404);
     return json(res, { matched: handleNote(u, String(b.text || b.message || raw)) });
   }
+  if (p === '/api/ably-token' && m === 'GET') {
+    const owner = byToken('alertToken', q.get('token') || '');
+    if (!owner || !ably) return json(res, { error: 'Realtime is not configured.' }, 501);
+    try {
+      const tokenRequest = await ably.auth.createTokenRequest({
+        clientId: 'overlay-' + owner.alertToken.slice(0, 12),
+        capability: { [channelName(owner.alertToken)]: ['subscribe'] },
+        ttl: 60 * 60 * 1000
+      });
+      res.setHeader('Cache-Control', 'no-store');
+      return json(res, tokenRequest);
+    } catch (error) {
+      console.error('BotStream realtime token error:', error);
+      return json(res, { error: 'Could not authorize overlay connection.' }, 503);
+    }
+  }
+
   if (p === '/api/tts') { // Khmer voice from Google Cloud Text-to-Speech, when GOOGLE_TTS_KEY is set
     const u = byToken('alertToken', q.get('token') || '');
     if (!u || !E.GOOGLE_TTS_KEY) { res.writeHead(501); return res.end(); }
