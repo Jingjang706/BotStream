@@ -24,7 +24,8 @@ const save = () => {
   fs.writeFileSync(DB, JSON.stringify(state));
 };
 
-const REDIS = VERCEL ? require('@upstash/redis').Redis.fromEnv() : null;
+const REDIS_CONFIGURED = VERCEL && !!(E.UPSTASH_REDIS_REST_URL && E.UPSTASH_REDIS_REST_TOKEN);
+const REDIS = REDIS_CONFIGURED ? require('@upstash/redis').Redis.fromEnv() : null;
 const PREFIX = String(E.BOTSTREAM_NAMESPACE || ('botstream:' + (VERCEL ? (E.VERCEL_ENV || 'preview') : 'local'))).replace(/[^a-zA-Z0-9:_-]/g, '').slice(0, 80);
 const REDIS_USERS = PREFIX + ':v1:users';
 const REDIS_SESSIONS = PREFIX + ':v1:sessions';
@@ -492,6 +493,35 @@ async function handleRequest(req, res) {
   let lockToken = null;
   try {
     const pathName = new URL(req.url, 'http://vercel').pathname;
+
+    // Keep liveness and static public pages available even before Redis is provisioned.
+    if (req.method === 'GET' && pathName === '/healthz') {
+      res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' });
+      return res.end('ok');
+    }
+    if (req.method === 'GET' && pathName === '/readyz') {
+      if (!REDIS) return json(res, { ready: false, error: 'Persistent storage is not configured. Add UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN.' }, 503);
+      try {
+        await REDIS.ping();
+        return json(res, { ready: true, storage: 'upstash' });
+      } catch (error) {
+        console.error('BotStream storage readiness check failed:', error);
+        return json(res, { ready: false, error: 'Persistent storage could not be reached.' }, 503);
+      }
+    }
+    const statelessGet = req.method === 'GET' && (
+      pathName === '/' || pathName === '/app' || pathName === '/overlay' ||
+      pathName === '/admin' || pathName.startsWith('/pay/') || pathName === '/api/config'
+    );
+    if (statelessGet) {
+      return requestContext.run({ users: {}, sessions: {} }, () => app(req, res));
+    }
+    if (!REDIS) {
+      return json(res, {
+        error: 'Persistent storage is not configured. Add UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN to the Vercel project environment.'
+      }, 503);
+    }
+
     if (req.method === 'GET' && pathName.startsWith('/events/')) {
       const token = pathName.slice(8);
       const snapshot = parseStored(await REDIS.get(overlayKey(token)));
