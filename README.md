@@ -1,9 +1,9 @@
-# LiveTip KH
+# BotStream · LiveTip KH
 
-Tip alerts and overlays for OBS. No dependencies: needs only Node 18 or newer.
+Multi-tenant live-tip pages, Khmer alerts, browser overlays and creator tools for OBS. Local development uses Node.js 20+. Vercel hosting uses Upstash Redis for durable shared state and Ably for realtime browser delivery.
 
-## Deploying for yourself
-See DEPLOY.md. Setting OWNER_PASSWORD makes it a one-account private install.
+## Deployment
+See [DEPLOY.md](DEPLOY.md). For multiple creators, leave `OWNER_PASSWORD` unset so account registration remains enabled. Setting it enables single-owner mode and closes registration.
 
 ## Run it
     node server.js
@@ -47,7 +47,7 @@ Check how your bank words its messages and, if needed, edit the patterns in `par
 - PORT, DB_FILE
 
 ## Deploy
-Any Node host (Render, a VPS). Data lives in data.json, so use a persistent disk and back it up. Use HTTPS.
+For Vercel multi-tenant hosting, follow [DEPLOY.md](DEPLOY.md). For a traditional Node host (Render, a VPS), data lives in data.json, so use a persistent disk and back it up. Use HTTPS.
 Behind a proxy, make sure it sets x-forwarded-for so rate limits see real visitors.
 
 ## Tested here
