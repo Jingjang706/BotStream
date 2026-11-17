@@ -502,10 +502,10 @@ async function handleRequest(req, res) {
         finishPromise = (async () => {
           let finalArgs = args;
           try {
+            if (state.__dirty) await persistRedisDb(state, before);
             if (state.__pendingPublishes && state.__pendingPublishes.length) {
               await Promise.all(state.__pendingPublishes);
             }
-            if (state.__dirty) await persistRedisDb(state, before);
           } catch (error) {
             console.error('BotStream storage write failed:', error);
             pendingHeaders = null;
