@@ -49,6 +49,8 @@ button.alt{background:transparent;color:var(--ink);border:2px solid var(--ink);p
       <div><label for="siteSchedule">Streaming schedule</label><input id="siteSchedule" maxlength="240" placeholder="Mon–Fri · 8 PM Cambodia time"></div>
       <div><label for="siteLiveUrl">Live stream URL</label><input id="siteLiveUrl" type="url" placeholder="https://youtube.com/..."></div>
     </div>
+    <label for="siteQuote">Signature quote / creator motto</label><input id="siteQuote" maxlength="180" placeholder="Turning passion into impact.">
+    <label for="siteMetrics">Audience metrics — one per line: platform | count (max 4)</label><textarea id="siteMetrics" placeholder="Facebook | 900K+&#10;YouTube | 549K+&#10;TikTok | 280K+"></textarea>
     <label for="siteBio">About / creator introduction</label><textarea id="siteBio" rows="4" maxlength="1800" placeholder="Tell your audience who you are, what you create and why it matters."></textarea>
     <label><input id="siteLive" type="checkbox"> I am live now (manual status)</label>
     <p class="mut">The LIVE badge is manual. Set your stream URL above; automatic platform live detection is not enabled yet.</p>
@@ -143,6 +145,8 @@ async function load() {
   $('siteSchedule').value = profile.schedule || '';
   $('siteLiveUrl').value = profile.liveUrl || '';
   $('siteBio').value = profile.bio || '';
+  $('siteQuote').value = profile.quote || '';
+  $('siteMetrics').value = (profile.metrics || []).map(item => item.label + ' | ' + item.value).join('\\n');
   $('siteLive').checked = !!profile.isLive;
   $('siteSocials').value = linesFor(profile.socials, ['title', 'url']);
   $('siteVideos').value = linesFor(profile.videos, ['title', 'description', 'url']);
@@ -181,6 +185,8 @@ async function saveProfile() {
     theme: $('siteTheme').value, avatarUrl: $('siteAvatar').value, coverUrl: $('siteCover').value,
     contactEmail: $('siteEmail').value, contactTelegram: $('siteTelegram').value,
     schedule: $('siteSchedule').value, liveUrl: $('siteLiveUrl').value, bio: $('siteBio').value,
+    quote: $('siteQuote').value,
+    metrics: parseProfileRows('siteMetrics', ['label', 'value']),
     isLive: $('siteLive').checked,
     socials: parseProfileRows('siteSocials', ['title', 'url']),
     videos: parseProfileRows('siteVideos', ['title', 'description', 'url']),
