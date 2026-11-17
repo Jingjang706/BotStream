@@ -233,7 +233,7 @@ function roomSnapshot(u) {
   const now = Date.now();
   return {
     creator: { slug: u.slug, name: u.name, profile: p },
-    live: { isLive: p.isLive, watchUrl: p.liveUrl, videoId: /^[\\w-]{11}$/.test(String(cfg(u).ytVideo || '')) ? cfg(u).ytVideo : ((p.liveUrl.match(/(?:v=|youtu\\.be\\/|embed\\/|shorts\\/)([\\w-]{11})/) || [])[1] || '') },
+    live: { isLive: p.isLive, watchUrl: p.liveUrl, videoId: /^[\w-]{11}$/.test(String(cfg(u).ytVideo || '')) ? cfg(u).ytVideo : ((p.liveUrl.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([\w-]{11})/) || [])[1] || '') },
     khqr: u.khqr || '',
     goal: { ...(u.goal || { title: 'Stream goal', target: 50 }), raised: s.raised, percent: Math.min(100, Math.round(s.raised / Math.max(1, (u.goal || {}).target || 50) * 100)) },
     stats: s,
@@ -395,7 +395,7 @@ async function app(req, res) {
     if (!u || String(b.password || '').length < 6 || hash(b.recovery, u.salt) !== u.rec) return json(res, { error: 'Recovery code or password is not valid.' }, 401);
     u.pass = hash(b.password, u.salt); return login(res, u.slug);
   }
-  const roomMatch = p.match(/^\\/api\\/room\\/([a-z0-9_]{3,20})(?:\\/(chat|react))?$/i);
+  const roomMatch = p.match(/^\/api\/room\/([a-z0-9_]{3,20})(?:\/(chat|react))?$/i);
   if (roomMatch && m === 'GET' && !roomMatch[2]) {
     const roomUser = db.users[roomMatch[1].toLowerCase()];
     if (!roomUser) return json(res, { error: 'Creator not found.' }, 404);
@@ -408,9 +408,9 @@ async function app(req, res) {
     if (!profile.chatEnabled) return json(res, { error: 'Chat is paused by the creator.' }, 403);
     if (await limited(req, 'room-chat:' + roomUser.slug, 8)) return json(res, { error: 'Slow down a little before sending another message.' }, 429);
     const name = profileText(b.name || 'Guest', 24).replace(/[<>]/g, '');
-    const message = profileText(b.message, 220).replace(/\\s+/g, ' ');
+    const message = profileText(b.message, 220).replace(/\s+/g, ' ');
     if (!name || !message) return json(res, { error: 'Add your name and a message.' }, 400);
-    if (/https?:\\/\\/|www\\./i.test(message)) return json(res, { error: 'Links are disabled in live chat.' }, 400);
+    if (/https?:\/\/|www\./i.test(message)) return json(res, { error: 'Links are disabled in live chat.' }, 400);
     const visitor = crypto.createHash('sha256').update(ip(req) + '|' + String(req.headers['user-agent'] || '')).digest('hex').slice(0, 24);
     roomUser.roomChatCooldown = roomUser.roomChatCooldown || {};
     const previous = roomUser.roomChatCooldown[visitor] || 0;
