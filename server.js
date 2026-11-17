@@ -22,11 +22,12 @@ const save = () => {
 };
 
 const REDIS = VERCEL ? require('@upstash/redis').Redis.fromEnv() : null;
-const REDIS_USERS = 'botstream:v1:users';
-const REDIS_SESSIONS = 'botstream:v1:sessions';
-const REDIS_LOCK = 'botstream:v1:write-lock';
-const overlayKey = token => 'botstream:v1:overlay:' + token;
-const userKey = slug => 'botstream:v1:user:' + encodeURIComponent(slug);
+const PREFIX = String(E.BOTSTREAM_NAMESPACE || 'botstream:production').replace(/[^a-zA-Z0-9:_-]/g, '').slice(0, 80);
+const REDIS_USERS = PREFIX + ':v1:users';
+const REDIS_SESSIONS = PREFIX + ':v1:sessions';
+const REDIS_LOCK = PREFIX + ':v1:write-lock';
+const overlayKey = token => PREFIX + ':v1:overlay:' + token;
+const userKey = slug => PREFIX + ':v1:user:' + encodeURIComponent(slug);
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 const parseStored = value => {
   if (value == null) return null;
@@ -361,10 +362,11 @@ async function app(req, res) {
   if (p.startsWith('/events/')) {
     const u = byToken('alertToken', p.slice(8));
     if (!u) return json(res, { error: 'Not found' }, 404);
+    const hasCursor = q.has('since');
     const since = Math.max(0, Number(q.get('since') || 0));
     res.setHeader('Cache-Control', 'no-store');
     return json(res, {
-      events: (u.events || []).filter(event => event.id > since),
+      events: hasCursor ? (u.events || []).filter(event => event.id > since) : [],
       cursor: u.eventSeq || 0,
       stats: stats(u)
     });
@@ -444,10 +446,12 @@ async function handleRequest(req, res) {
       const token = pathName.slice(8);
       const snapshot = parseStored(await REDIS.get(overlayKey(token)));
       if (!snapshot) return json(res, { error: 'Not found' }, 404);
-      const since = Math.max(0, Number(new URL(req.url, 'http://vercel').searchParams.get('since') || 0));
+      const eventUrl = new URL(req.url, 'http://vercel');
+      const hasCursor = eventUrl.searchParams.has('since');
+      const since = Math.max(0, Number(eventUrl.searchParams.get('since') || 0));
       res.setHeader('Cache-Control', 'no-store');
       return json(res, {
-        events: (snapshot.events || []).filter(event => event.id > since),
+        events: hasCursor ? (snapshot.events || []).filter(event => event.id > since) : [],
         cursor: snapshot.cursor || 0,
         stats: snapshot.stats
       });
