@@ -113,6 +113,34 @@ test('creator registration, tip matching, overlay events, and disk persistence',
   assert.equal(publicProfile.profile.isLive, true);
   assert.equal(publicProfile.profile.liveUrl, 'https://youtube.com/@testcreator/live');
 
+  // Public Live Lounge: audience can read the room, chat and react without creator credentials.
+  const roomResponse = await fetch(base + '/api/room/testcreator');
+  assert.equal(roomResponse.status, 200);
+  const room = await roomResponse.json();
+  assert.equal(room.creator.profile.title, 'Test Creator');
+  assert.equal(room.live.isLive, true);
+  assert.equal(room.khqr, '');
+  const { response: chatResponse, data: chatData } = await postJson(base + '/api/room/testcreator/chat', {
+    name: 'ChillViewer', message: 'Lets gooo!'
+  });
+  assert.equal(chatResponse.status, 200);
+  assert.equal(chatData.ok, true);
+  assert.equal(chatData.item.message, 'Lets gooo!');
+  const blockedLink = await postJson(base + '/api/room/testcreator/chat', {
+    name: 'Spammer', message: 'visit https://example.com'
+  });
+  assert.equal(blockedLink.response.status, 400);
+  const reaction = await postJson(base + '/api/room/testcreator/react', { emoji: '🔥' });
+  assert.equal(reaction.response.status, 200);
+  assert.equal(reaction.data.reactions['🔥'], 1);
+  const moderated = await postJson(base + '/api/room/moderate', {
+    action: 'delete', id: chatData.item.id
+  }, auth);
+  assert.equal(moderated.response.status, 200);
+  assert.equal(moderated.data.messages.length, 0);
+  const afterModeration = await fetch(base + '/api/room/testcreator').then(r => r.json());
+  assert.equal(afterModeration.messages.length, 0);
+
   const { response: pendingResponse, data: pending } = await postJson(base + '/api/pay/testcreator', {
     name: 'Stream Supporter',
     amount: 4.5,
