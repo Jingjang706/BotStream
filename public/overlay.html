@@ -11,7 +11,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:transparent;font:700 3
 #vid{width:100%;aspect-ratio:16/9;border:0;border-radius:12px;margin-top:12px}
 #scare{position:fixed;inset:0;display:grid;place-items:center;background:#b00020;font-size:120px;text-align:center;opacity:0;pointer-events:none}
 #scare.on{animation:sc .9s steps(2) 1}@keyframes sc{0%,100%{opacity:0}10%,60%{opacity:1}}
-#goal,#top,#poll,#chat{position:fixed;left:20px;right:20px;bottom:20px}
+#goal,#top,#poll,#pred,#chat{position:fixed;left:20px;right:20px;bottom:20px}
 .track{height:26px;border-radius:99px;background:#0008;margin-top:8px;overflow:hidden}
 .fill{height:100%;background:#ffd166;transition:width .8s;border-radius:99px}
 .row{display:flex;justify-content:space-between;background:#0008;border-radius:12px;padding:6px 16px;margin-top:6px}
@@ -23,7 +23,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:transparent;font:700 3
 <div id="card"><div id="crown" hidden>New top donor!</div><b id="t"></b><span id="m"></span><iframe id="vid" hidden allow="autoplay"></iframe></div>
 <div id="scare"></div>
 <div id="goal" hidden><div id="gt"></div><div class="track"><div class="fill" id="gf"></div></div></div>
-<div id="top" hidden></div><div id="poll" hidden></div><div id="timer" hidden></div><div id="chat" hidden></div>
+<div id="top" hidden></div><div id="poll" hidden></div><div id="pred" hidden></div><div id="timer" hidden></div><div id="chat" hidden></div>
 <div id="wheelbox" hidden><div id="wt"></div><canvas id="cv" width="520" height="520"></canvas><div id="wr"></div></div>
 <script>
 const q = new URLSearchParams(location.search), token = q.get('token'), w = q.get('w') || 'alerts', voice = q.get('voice') !== 'off';
@@ -40,12 +40,12 @@ function hideCard() { clearTimeout(hideT); $('card').classList.remove('on'); $('
 function next() {
   if (busy || !queue.length) return;
   busy = true; const d = queue.shift();
-  $('t').textContent = d.name + ' · ' + money(d); $('m').textContent = d.message || '';
+  $('t').textContent = d.redeem ? d.name + ' redeemed ' + d.title : d.name + ' · ' + money(d); $('m').textContent = d.message || '';
   $('crown').hidden = !d.champion;
   if (d.media) { $('vid').src = 'https://www.youtube-nocookie.com/embed/' + d.media + '?autoplay=1'; $('vid').hidden = false; }
   $('card').classList.add('on');
   if (d.scare) { $('scare').textContent = d.name + ' 😱'; $('scare').classList.remove('on'); void $('scare').offsetWidth; $('scare').classList.add('on'); }
-  speak(d.name + ' ' + money(d) + '. ' + (d.message || ''));
+  speak(d.redeem ? d.name + ' redeemed ' + d.title + '. ' + (d.message || '') : d.name + ' ' + money(d) + '. ' + (d.message || ''));
   hideT = setTimeout(hideCard, d.media ? 30000 : 8000);
 }
 
@@ -58,10 +58,20 @@ function bars(box, d) {
     const a = document.createElement('span'); a.textContent = o.t; const b = document.createElement('span'); b.textContent = o.v; r.append(a, b); box.appendChild(r);
   });
 }
+function predBars(box, d) {
+  box.textContent = '';
+  const h = document.createElement('div'); h.textContent = d.q + (d.state === 'locked' ? ' · bets locked' : d.state === 'open' ? ' · bet with fan points' : d.win >= 0 ? ' · result in' : ' · cancelled'); box.appendChild(h);
+  const tot = d.options.reduce((s, o) => s + o.pool, 0) || 1;
+  d.options.forEach((o, i) => {
+    const r = document.createElement('div'); r.className = 'row'; r.style.background = 'linear-gradient(90deg,' + (d.state === 'done' && d.win === i ? '#0f9d92cc' : '#7b6cf699') + ' ' + (o.pool / tot * 100) + '%,#0008 0)';
+    const a = document.createElement('span'); a.textContent = (d.state === 'done' && d.win === i ? '🏆 ' : '') + o.t; const b = document.createElement('span'); b.textContent = o.pool; r.append(a, b); box.appendChild(r);
+  });
+}
 function stats(d) {
   useServerTts = d.tts;
   if (w === 'goal') { $('goal').hidden = false; $('gt').textContent = d.goal.title + ': $' + d.raised + ' of $' + d.goal.target; $('gf').style.width = Math.min(100, d.raised / d.goal.target * 100) + '%'; }
   if (w === 'top') { const box = $('top'); box.hidden = false; box.textContent = ''; d.top.forEach(t => { const r = document.createElement('div'); r.className = 'row'; r.textContent = t.name; const v = document.createElement('span'); v.textContent = '$' + t.usd; r.appendChild(v); box.appendChild(r); }); }
+  if (w === 'predict') { $('pred').hidden = !d.pred; if (d.pred) predBars($('pred'), d.pred); }
   if (w === 'poll') { $('poll').hidden = !d.poll; if (d.poll) bars($('poll'), d.poll); }
   if (w === 'timer') { timerAt = d.timer; $('timer').hidden = !timerAt; }
   if (w === 'chat' && !chatOn) { chatOn = true; chat(q.get('video') || d.video, ''); }
@@ -107,6 +117,7 @@ es.onmessage = e => {
   const d = JSON.parse(e.data);
   if (d.type === 'tip' && w === 'alerts') { queue.push(d); next(); }
   if (d.type === 'spin' && w === 'wheel') runWheel(d);
+  if (d.type === 'redeem' && w === 'alerts') { queue.push({ ...d, redeem: true, scare: d.kind === 'scare' }); next(); }
   if (d.type === 'skip' && w === 'alerts') { queue = []; if (busy) hideCard(); }
   if (d.type === 'stats') stats(d);
 };

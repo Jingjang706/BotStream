@@ -9,7 +9,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Instrument Sa
 main{max-width:720px;margin:0 auto}h1{font-size:30px;margin:0 0 18px}h2{font-size:20px;margin:0 0 10px}
 section{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:20px;margin-bottom:16px}
 label{display:block;font-weight:600;margin:12px 0 5px}
-input{width:100%;font:inherit;color:inherit;background:transparent;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+input,textarea{width:100%;font:inherit;color:inherit;background:transparent;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
 button{font-weight:600;font-size:16px;font-family:inherit;background:var(--acc);color:#fff;border:0;border-radius:999px;padding:10px 20px;cursor:pointer;margin:12px 8px 0 0}
 button.alt{background:transparent;color:var(--ink);border:2px solid var(--ink);padding:6px 14px;margin:0}
 .link{display:flex;gap:8px;align-items:center;margin:8px 0}.link code{flex:1;overflow:auto;white-space:nowrap;background:var(--bg);padding:8px 10px;border-radius:8px;font-size:13px}
@@ -39,18 +39,25 @@ button.alt{background:transparent;color:var(--ink);border:2px solid var(--ink);p
     <button onclick="raffle('draw')">Draw raffle winner</button><button class="alt" onclick="raffle('clear')">Clear raffle</button> <span id="rn" class="mut"></span>
     <label for="tm">Subathon timer (minutes)</label><input id="tm" type="number" min="1" placeholder="60">
     <button onclick="timer(+$('tm').value)">Start timer</button><button class="alt" onclick="timer(0)">Stop timer</button>
-    <button class="alt" onclick="announce()">Tell Telegram I’m live</button> <span id="lm" class="mut"></span></section>
+    <button class="alt" onclick="announce()">Announce I’m live (Telegram, Discord)</button> <span id="lm" class="mut"></span></section>
 
   <section><h2>Poll</h2>
     <label for="pq">Question</label><input id="pq" maxlength="80"><label for="po">Options, separated by commas</label><input id="po" placeholder="Game A, Game B, Game C">
     <button onclick="poll('new')">Start poll</button><button class="alt" onclick="poll('close')">Close</button> <button class="alt" onclick="poll('clear')">Clear</button> <span id="pm" class="err"></span></section>
+
+  <section><h2>Prediction (viewers bet fan points)</h2>
+    <label for="dq">Question</label><input id="dq" maxlength="80" placeholder="Will I win this round?"><label for="do">2 or 3 outcomes, separated by commas</label><input id="do" placeholder="Yes, No">
+    <button onclick="pred('new')">Start prediction</button><button class="alt" onclick="pred('lock')">Lock bets</button><button class="alt" onclick="pred('cancel')">Cancel and refund</button><button class="alt" onclick="pred('clear')">Clear</button>
+    <label for="dw">Winning outcome number (1, 2 or 3)</label><input id="dw" type="number" min="1" max="3"><button onclick="pred('resolve')">Pay out winners</button> <span id="dm" class="err"></span></section>
 
   <section><h2>Settings</h2>
     <div class="grid"><div><label for="dn">Display name</label><input id="dn" maxlength="30"></div><div></div>
     <div><label for="gt">Goal title</label><input id="gt" maxlength="40"></div><div><label for="gg">Goal amount (USD)</label><input id="gg" type="number" min="1"></div>
     <div><label for="sm">Spin the wheel at (USD, 0 = off)</label><input id="sm" type="number" min="0"></div><div><label for="ss">Jumpscare at (USD, 0 = off)</label><input id="ss" type="number" min="0"></div>
     <div><label for="tp">Timer minutes added per $1</label><input id="tp" type="number" min="0" step="any"></div><div><label for="mm">Media share from (USD)</label><input id="mm" type="number" min="0" step="any"></div>
-    <div><label for="tc">Telegram chat ID</label><input id="tc"></div><div><label for="yv">YouTube live video ID</label><input id="yv" maxlength="11"></div></div>
+    <div><label for="tc">Telegram chat ID</label><input id="tc"></div><div><label for="yv">YouTube live video ID</label><input id="yv" maxlength="11"></div>
+    <div><label for="pp">Fan points per $1 tipped</label><input id="pp" type="number" min="0" step="any"></div><div><label for="dh">Discord webhook URL</label><input id="dh" type="password" autocomplete="off" placeholder="https://discord.com/api/webhooks/..."></div></div>
+    <label for="rd">Redeems, one per line: name | cost | alert, scare or spin</label><textarea id="rd" rows="4"></textarea>
     <label for="ws">Wheel slices, separated by commas</label><input id="ws">
     <label for="qr">Your KHQR image</label><input id="qr" type="file" accept="image/*"><img id="qp" alt="" hidden>
     <button onclick="saveSettings()">Save settings</button> <span id="se" class="mut"></span>
@@ -88,7 +95,7 @@ async function load() {
   if (me.error) { localStorage.removeItem('session'); S = null; return; }
   $('auth').hidden = true; $('dash').hidden = false;
   const o = location.origin, t = me.alertToken, ov = w => o + '/overlay?w=' + w + '&token=' + t;
-  const L = [['Tip page (share with viewers)', o + '/pay/' + me.slug], ['Alerts overlay', ov('alerts')], ['Spin and raffle wheel overlay', ov('wheel')], ['Goal bar overlay', ov('goal')], ['Top donors overlay', ov('top')], ['Subathon timer overlay', ov('timer')], ['Poll overlay', ov('poll')], ['YouTube chat overlay', ov('chat')]];
+  const L = [['Tip page (share with viewers)', o + '/pay/' + me.slug], ['Alerts overlay', ov('alerts')], ['Spin and raffle wheel overlay', ov('wheel')], ['Goal bar overlay', ov('goal')], ['Top donors overlay', ov('top')], ['Subathon timer overlay', ov('timer')], ['Poll overlay', ov('poll')], ['Prediction overlay', ov('predict')], ['YouTube chat overlay', ov('chat')]];
   $('links').textContent = '';
   L.forEach(([name, url], i) => {
     const d = document.createElement('div'); d.innerHTML = '<div class="mut"></div><div class="link"><code id="l' + i + '"></code><button class="alt">Copy</button></div>';
@@ -96,7 +103,7 @@ async function load() {
   });
   $('nh').textContent = o + '/api/notify/' + me.notifyToken;
   const c = me.cfg; $('dn').value = me.name; $('gt').value = me.goal.title; $('gg').value = me.goal.target;
-  $('sm').value = c.spinMin; $('ss').value = c.scareMin; $('tp').value = c.timerPerUsd; $('mm').value = c.mediaMin; $('tc').value = c.tgChat; $('yv').value = c.ytVideo; $('ws').value = me.wheel.join(', ');
+  $('sm').value = c.spinMin; $('ss').value = c.scareMin; $('tp').value = c.timerPerUsd; $('mm').value = c.mediaMin; $('tc').value = c.tgChat; $('yv').value = c.ytVideo; $('ws').value = me.wheel.join(', '); $('pp').value = c.pointsPerUsd; $('dh').value = c.discordHook || ''; $('rd').value = me.redeems.map(r => r.title + ' | ' + r.cost + ' | ' + r.kind).join('\n');
   $('rn').textContent = me.raffle + ' entries';
   $('sv').textContent = 'Server features: Telegram ' + (me.tgReady ? 'ready' : 'not set up') + ', YouTube chat ' + (me.ytReady ? 'ready' : 'not set up') + '.';
   if (me.khqr) { $('qp').src = me.khqr; $('qp').hidden = false; }
@@ -108,7 +115,8 @@ $('qr').onchange = e => { const f = e.target.files[0]; if (!f) return; const r =
 async function saveSettings() {
   const n = id => +$(id).value;
   const b = { name: $('dn').value, goal: { title: $('gt').value, target: n('gg') }, wheel: $('ws').value.split(','),
-    cfg: { spinMin: n('sm'), scareMin: n('ss'), timerPerUsd: n('tp'), mediaMin: n('mm'), tgChat: $('tc').value, ytVideo: $('yv').value } };
+    cfg: { spinMin: n('sm'), scareMin: n('ss'), timerPerUsd: n('tp'), mediaMin: n('mm'), pointsPerUsd: n('pp'), tgChat: $('tc').value, ytVideo: $('yv').value, discordHook: $('dh').value },
+    redeems: $('rd').value.split('\n').map(l => l.split('|').map(s => s.trim())).filter(a => a[0]).map(a => ({ title: a[0], cost: a[1], kind: a[2] })) };
   if (qr) b.khqr = qr;
   const d = await api('/api/settings', b); $('se').textContent = d.ok ? 'Saved.' : 'Could not save. The QR image may be too large.'; load();
 }
@@ -116,6 +124,7 @@ const act = p => api('/api/' + p, {});
 async function raffle(a) { const d = await api('/api/raffle', { action: a }); $('rn').textContent = d.error || (a === 'clear' ? '0 entries' : d.entries + ' entries'); }
 async function timer(m) { await api('/api/timer', { minutes: m }); }
 async function poll(a) { const d = await api('/api/poll', a === 'new' ? { q: $('pq').value, options: $('po').value.split(',').map(s => s.trim()) } : { action: a }); $('pm').textContent = d.error || ''; }
+async function pred(a) { const body = a === 'new' ? { q: $('dq').value, options: $('do').value.split(',').map(s => s.trim()) } : a === 'resolve' ? { action: a, win: +$('dw').value - 1 } : { action: a }; const d = await api('/api/predict', body); $('dm').textContent = d.error || ''; }
 async function announce() { const d = await api('/api/announce', { origin: location.origin }); $('lm').textContent = d.error || 'Sent.'; }
 async function backup() {
   const r = await fetch('/api/backup', { headers: { Authorization: 'Bearer ' + S } });

@@ -14,11 +14,18 @@ it is the only way to reset a forgotten password.
 Your dashboard shows every link. They share the form /overlay?w=NAME&token=YOURTOKEN
 - alerts: tip alerts, Khmer voice, jumpscare, "new top donor" crown, YouTube media share
 - wheel: spin wheel (triggered by tips) and raffle winner draws
-- goal, top, timer (subathon countdown), poll (live results), chat (YouTube live chat)
+- goal, top, timer (subathon countdown), poll (live results), predict (live prediction pools), chat (YouTube live chat)
 
 ## Tools in the dashboard (work from a phone while live)
 Test alert, skip alert, test spin, draw or clear raffle, start or stop the timer, create or close a poll,
 tell Telegram you are live. Settings set the spin, jumpscare and media-share thresholds, minutes added to the timer per $1, and the wheel slices.
+
+## Fan points, redeems and predictions
+- Viewers earn fan points for every matched tip (default 10 per $1, set in Settings). On the tip page they pick an optional passcode. The first tip with a passcode locks that name to it, so nobody else can spend those points.
+- Redeems are set in Settings, one per line as `name | cost | alert, scare or spin`. A viewer spends points on the tip page and the alert, jumpscare or wheel spin fires on stream.
+- Predictions: start one in the dashboard (2 or 3 outcomes). Viewers bet points on the tip page. Lock the bets, then pay out the winners: the whole pool is split between winners by how much they bet. Cancel refunds everyone.
+- Points only come from tips that matched a pending tip on the tip page, never from unmatched bank texts.
+- Discord: paste a Discord webhook URL in Settings to post each tip and your go-live message there.
 
 ## How a tip flows
 1. Viewer fills the tip page (name, amount, message, optional YouTube link), then sees your KHQR.
@@ -44,12 +51,12 @@ Any Node host (Render, a VPS). Data lives in data.json, so use a persistent disk
 Behind a proxy, make sure it sets x-forwarded-for so rate limits see real visitors.
 
 ## Tested here
-Accounts, recovery reset, rate limits, tip matching, alerts, spin, raffle, timer, polls and one-vote-per-visitor, media-share rules, admin.
+Accounts, recovery reset, rate limits, tip matching, alerts, spin, raffle, timer, polls and one-vote-per-visitor, media-share rules, admin, fan points, passcode checks, redeems, prediction bets and payouts.
 ## Written but not tested (needs internet or your keys)
-YouTube video check before payment, Telegram messages, Google voice, YouTube chat.
+YouTube video check before payment, Telegram and Discord messages, Google voice, YouTube chat, and how the new overlay and tip-page screens look in a real browser.
 
 ## Not built
 - Telegram sign-in by QR (needs a Telegram user-account library; bots cannot read other bots' messages)
-- Card pulls and battles, fan points and redeems (these need card art, game rules and donor identities that can't be faked)
+- Card pulls and battles (these need card art and game rules)
 - Automatic go-live detection (use the Telegram button in the dashboard)
 - Email, payments beyond the bank text, a billing system
