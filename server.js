@@ -167,6 +167,8 @@ function cleanProfile(input) {
     coverUrl: safeProfileUrl(p.coverUrl),
     theme: /^#[0-9a-f]{6}$/i.test(String(p.theme || '')) ? String(p.theme) : '#f05b78',
     schedule: profileText(p.schedule, 240),
+    quote: profileText(p.quote, 180),
+    metrics: (Array.isArray(p.metrics) ? p.metrics : []).slice(0, 4).map(item => ({ label: profileText(item && item.label, 24), value: profileText(item && item.value, 32) })).filter(item => item.label && item.value),
     isLive: p.isLive === true,
     liveUrl: safeProfileUrl(p.liveUrl),
     contactEmail: /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email) ? email : '',
