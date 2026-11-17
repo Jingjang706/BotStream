@@ -102,7 +102,7 @@ let S = localStorage.getItem('session'), me, qr;
 const api = (path, body) => fetch(path, { method: body ? 'POST' : 'GET', headers: { Authorization: 'Bearer ' + S, ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body && JSON.stringify(body) }).then(r => r.json());
 const money = t => t.currency === 'KHR' ? '៛' + t.amount.toLocaleString() : '$' + t.amount;
 const copy = id => navigator.clipboard.writeText($(id).textContent);
-const linesFor = (items, keys) => (items || []).map(item => keys.map(key => item[key] || '').join(' | ')).join('\\n');
+const linesFor = (items, keys) => (items || []).map(item => keys.map(key => item[key] || '').join(' | ')).join('\n');
 const post = (path, body) => fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json());
 
 async function auth(kind) {
@@ -171,7 +171,7 @@ async function saveSettings() {
 }
 
 function parseProfileRows(id, keys) {
-  return $(id).value.split(/\\r?\\n/).map(line => line.split('|').map(value => value.trim()))
+  return $(id).value.split(/\r?\n/).map(line => line.split('|').map(value => value.trim()))
     .filter(parts => parts.some(Boolean)).slice(0, 12)
     .map(parts => Object.fromEntries(keys.map((key, index) => [key, parts[index] || ''])));
 }
