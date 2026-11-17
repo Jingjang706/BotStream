@@ -112,13 +112,35 @@ async function chat(video, page) {
 }
 
 if (w !== 'alerts') $('card').hidden = $('scare').hidden = true;
-const es = new EventSource('/events/' + token);
-es.onmessage = e => {
-  const d = JSON.parse(e.data);
+function handleEvent(d) {
   if (d.type === 'tip' && w === 'alerts') { queue.push(d); next(); }
   if (d.type === 'spin' && w === 'wheel') runWheel(d);
   if (d.type === 'redeem' && w === 'alerts') { queue.push({ ...d, redeem: true, scare: d.kind === 'scare' }); next(); }
   if (d.type === 'skip' && w === 'alerts') { queue = []; if (busy) hideCard(); }
   if (d.type === 'stats') stats(d);
-};
+}
+
+// Serverless hosts do not keep a request open for EventSource. Poll the durable
+// event cursor instead so every Vercel instance sees the same events.
+let eventCursor = null, pollDelay = 2000;
+async function pollEvents() {
+  try {
+    const suffix = eventCursor === null ? '' : '?since=' + encodeURIComponent(eventCursor);
+    const response = await fetch('/events/' + encodeURIComponent(token) + suffix, { cache: 'no-store' });
+    if (!response.ok) throw new Error('Overlay connection failed');
+    const payload = await response.json();
+    if (eventCursor === null) {
+      eventCursor = Number(payload.cursor || 0); // do not replay alerts from before this overlay opened
+    } else {
+      for (const event of payload.events || []) handleEvent(event.data);
+      eventCursor = Math.max(eventCursor, Number(payload.cursor || 0));
+    }
+    if (payload.stats) stats(payload.stats);
+    pollDelay = 2000;
+  } catch {
+    pollDelay = Math.min(15000, Math.round(pollDelay * 1.7));
+  }
+  setTimeout(pollEvents, pollDelay);
+}
+pollEvents();
 </script></body></html>
