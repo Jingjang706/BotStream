@@ -10,7 +10,8 @@ The Vercel adapter stores account data in Upstash Redis and uses Ably to deliver
 
 1. Create an Upstash Redis database in a region close to the Vercel function region. Copy its REST URL and REST token.
 2. Create an Ably app and an API key whose allowed capability includes **publish** and **subscribe**. Keep the complete key secret; it belongs only in Vercel environment variables.
-3. Use a Vercel Pro project for commercial/client hosting. Vercel's free Hobby plan is restricted to personal and non-commercial use.
+3. BotStream's Vercel function is configured for the Singapore (`sin1`) region, so choose the closest available Upstash region for that function.
+4. Use a Vercel Pro project for commercial/client hosting. Vercel's free Hobby plan is restricted to personal and non-commercial use.
 
 ### 2. Import the repository
 
@@ -23,7 +24,7 @@ The Vercel adapter stores account data in Upstash Redis and uses Ably to deliver
 | `UPSTASH_REDIS_REST_URL` | Yes | Upstash database REST URL |
 | `UPSTASH_REDIS_REST_TOKEN` | Yes | Upstash database REST token |
 | `ABLY_API_KEY` | Recommended for live use | Full Ably API key in `name:secret` format; never expose it in browser code |
-| `BOTSTREAM_NAMESPACE` | Recommended | Unique prefix such as `botstream:production`; use a different prefix for every deployment sharing one Redis database |
+| `BOTSTREAM_NAMESPACE` | Optional | Defaults automatically to `botstream:production`, `botstream:preview`, or `botstream:development` according to `VERCEL_ENV`. Set a custom unique prefix only when needed to isolate projects sharing one Redis database |
 | `OWNER_PASSWORD` | No | Leave unset for multi-creator signup. Set only for a single-owner installation |
 | `OWNER_SLUG` | No | Defaults to `owner`; use `me` for the single-owner tip page |
 | `ALERT_TOKEN` | No | Optional fixed OBS overlay token. Generate a long random value |
