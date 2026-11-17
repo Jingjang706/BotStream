@@ -1,33 +1,70 @@
-# Deploy LiveTip KH for yourself
+# BotStream deployment guide
 
-Owner mode is on whenever OWNER_PASSWORD is set: one account (yours), signups closed,
-and the home page sends visitors straight to your tip page.
+BotStream is a stateful Node.js app. Choose the deployment target that matches how you intend to use it.
 
-## 1. Make two private link tokens (run on your computer)
-    node -e "console.log(require('crypto').randomBytes(16).toString('hex'))"
-Run it twice. One is ALERT_TOKEN (in your OBS links), the other is NOTIFY_TOKEN (in your phone webhook).
-Because you set them yourself, your links never change when the server restarts.
+## Vercel — multi-creator hosting
 
-## 2. Render (easiest)
-1. Put this folder in a GitHub repo (keep it private). data.json and .env are already ignored.
-2. Render > New > Blueprint > pick the repo. It reads render.yaml.
-3. When asked, enter OWNER_PASSWORD (long, only you know it), ALERT_TOKEN and NOTIFY_TOKEN.
-4. Deploy. Your site is at https://YOURAPP.onrender.com. Log in at /app with username "me" and your password.
-The "starter" plan is needed for the 1 GB disk. Without a disk, tips, your KHQR image and settings are erased on every restart,
-and the free plan also sleeps, which would delay alerts. Do not use the free plan for live streaming.
+The Vercel adapter stores account data in Upstash Redis and uses Ably to deliver OBS overlay events in realtime. Do not deploy the original JSON-file mode to Vercel: Vercel function filesystems are not durable between invocations.
 
-## Cheaper or other options
-Any small VPS or Fly.io works: `docker build -t livetip .` then run with a volume mounted at /data and the same environment variables.
-Put HTTPS in front (Caddy or the host's built-in HTTPS).
+### 1. Create the hosted services
 
-## 3. First-time setup (in /app)
-1. Upload your KHQR image and press Save.
-2. Copy the overlay links into OBS as Browser Sources (alerts, goal, etc.).
-3. Press "Test alert" to check OBS.
-4. Phone webhook: MacroDroid or Tasker, trigger = notification from your bank app, action = HTTP POST to the webhook URL shown in /app, body = the notification text.
-5. Share your tip page link: https://YOURAPP.onrender.com/pay/me
+1. Create an Upstash Redis database in a region close to the Vercel function region. Copy its REST URL and REST token.
+2. Create an Ably app and an API key whose allowed capability includes **publish** and **subscribe**. Keep the complete key secret; it belongs only in Vercel environment variables.
+3. Use a Vercel Pro project for commercial/client hosting. Vercel's free Hobby plan is restricted to personal and non-commercial use.
 
-## Staying safe
-- Anyone with your ALERT_TOKEN can watch your alert stream, and anyone with NOTIFY_TOKEN can fake a tip. Keep both private. To change them, edit the variables and redeploy, then update OBS and your phone.
-- Use "Download backup" in /app now and then.
-- Forgot the password? Change OWNER_PASSWORD on the server and restart.
+### 2. Import the repository
+
+1. In Vercel, choose **Add New → Project** and import `Jingjang706/BotStream`.
+2. Keep the project root as the repository root. Vercel detects the Node.js function from `api/index.js` and uses `vercel.json` to route the app pages and API requests through it.
+3. Add the environment variables below in **Project → Settings → Environment Variables** for Production and Preview.
+
+| Variable | Required | Value |
+|---|---:|---|
+| `UPSTASH_REDIS_REST_URL` | Yes | Upstash database REST URL |
+| `UPSTASH_REDIS_REST_TOKEN` | Yes | Upstash database REST token |
+| `ABLY_API_KEY` | Recommended for live use | Full Ably API key in `name:secret` format; never expose it in browser code |
+| `BOTSTREAM_NAMESPACE` | Recommended | Unique prefix such as `botstream:production`; use a different prefix for every deployment sharing one Redis database |
+| `OWNER_PASSWORD` | No | Leave unset for multi-creator signup. Set only for a single-owner installation |
+| `OWNER_SLUG` | No | Defaults to `owner`; use `me` for the single-owner tip page |
+| `ALERT_TOKEN` | No | Optional fixed OBS overlay token. Generate a long random value |
+| `NOTIFY_TOKEN` | No | Optional fixed bank-notification webhook token. Generate a different long random value |
+| `ADMIN_KEY` | No | Optional admin endpoint key |
+| `TELEGRAM_BOT_TOKEN` | No | Optional Telegram bot integration |
+| `GOOGLE_TTS_KEY` | No | Optional Google Cloud Text-to-Speech |
+| `YOUTUBE_API_KEY` | No | Optional YouTube Data API |
+
+For a multi-client service, do **not** set `OWNER_PASSWORD`; doing so intentionally switches off registration and creates a single-owner install. Add secrets in Vercel's dashboard, not in Git.
+
+4. Deploy. The first deployment initializes Redis only when the first request arrives. Open the Vercel URL and create a test creator account.
+
+### 3. Verify before inviting clients
+
+1. Register a test account and save its recovery code.
+2. Sign in, upload a test KHQR image, and save settings.
+3. Open the tip page and submit a small test tip request. This only creates a pending tip; it does not verify a real bank payment.
+4. Add the `alerts` link as an OBS Browser Source and click **Test alert** in the dashboard.
+5. Verify the overlay receives events, refresh the page, and confirm the account and settings still exist.
+6. Configure the Android notification automation only after you have verified the exact format of your bank's notifications. Keep the webhook URL private.
+
+### 4. Cost and scaling notes
+
+- Vercel Hobby is free but restricted to personal/non-commercial use. Client/business hosting must use a plan that permits commercial use.
+- Upstash Redis Free currently includes 256 MB and 500,000 commands per month. It is suitable for a low-traffic pilot, not an unlimited free production database.
+- Ably Free currently includes 6 million messages per month and up to 200 concurrent connections. Each connected OBS Browser Source consumes a connection, and published events are delivered to each subscribed source.
+- If Ably is not configured, overlays fall back to frequent Redis polling. Configure Ably for normal Vercel use.
+- The current adapter serializes writes with a shared Redis lock and loads creator records for a request. This is a safe first serverless migration for a small pilot, but it is not yet a high-throughput SaaS architecture. Before onboarding many simultaneous creators, move to per-tenant transactions/records and add load tests, monitoring, backups, and restore drills.
+- Tip matching still relies on creator-provided bank notification text posted to the private webhook. It is not a direct bank payment API or an independent proof of settlement.
+
+## Traditional Node hosting (Render or VPS)
+
+The original local mode still stores state in `data.json`. Use a host with a persistent disk, mount it, set `DB_FILE` to that mounted path, and terminate HTTPS at the host or a reverse proxy.
+
+For a single creator, set `OWNER_PASSWORD` and optionally set `OWNER_SLUG=me`, `ALERT_TOKEN`, and `NOTIFY_TOKEN`. The existing `render.yaml` is an example Render Blueprint and currently uses a paid persistent-disk plan.
+
+## Security checklist
+
+- Never commit `.env`, Redis credentials, the Ably API key, owner passwords, webhook tokens, or a real KHQR image.
+- Use different random values for `ALERT_TOKEN` and `NOTIFY_TOKEN`. Anyone holding the notify token can submit fake payment notifications.
+- Use a unique `BOTSTREAM_NAMESPACE` for each environment and do not point Preview and Production at the same namespace.
+- Take regular Redis backups/exports and test restoring them before handling valuable client data.
+- Do not treat the app as a regulated payment processor. Verify all bank notification matching and creator payout workflows manually.

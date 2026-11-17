@@ -1,15 +1,131 @@
-// LiveTip KH server. No npm install needed. Run: node server.js  (Node 18+)
+// BotStream / LiveTip KH. Local: node server.js. Vercel: api/index.js with shared Redis storage.
 // Owner mode env: OWNER_PASSWORD (turns it on), OWNER_SLUG, ALERT_TOKEN, NOTIFY_TOKEN, LANDING=1
 // Optional env: PORT, DB_FILE, ADMIN_KEY, TELEGRAM_BOT_TOKEN, GOOGLE_TTS_KEY, YOUTUBE_API_KEY
 const http = require('http'), fs = require('fs'), path = require('path'), crypto = require('crypto');
+const { AsyncLocalStorage } = require('async_hooks');
 const E = process.env, PORT = E.PORT || 3000, DB = E.DB_FILE || 'data.json', KHR_RATE = 4000;
-let db = { users: {}, sessions: {} };
-try { db = JSON.parse(fs.readFileSync(DB, 'utf8')); } catch {}
-const save = () => fs.writeFileSync(DB, JSON.stringify(db));
+const VERCEL = !!E.VERCEL;
+const Ably = VERCEL && E.ABLY_API_KEY ? require('ably/promises') : null;
+const ably = Ably ? new Ably.Rest(E.ABLY_API_KEY) : null;
+const channelName = token => 'botstream:' + token;
+const requestContext = new AsyncLocalStorage();
+let localDb = { users: {}, sessions: {} };
+if (!VERCEL) {
+  try { localDb = JSON.parse(fs.readFileSync(DB, 'utf8')); } catch {}
+}
+const currentDb = () => requestContext.getStore() || localDb;
+const db = new Proxy({}, {
+  get: (_target, key) => currentDb()[key],
+  set: (_target, key, value) => { currentDb()[key] = value; return true; }
+});
+const save = () => {
+  const state = currentDb();
+  if (VERCEL) { state.__dirty = true; return; }
+  fs.writeFileSync(DB, JSON.stringify(state));
+};
+
+const REDIS = VERCEL ? require('@upstash/redis').Redis.fromEnv() : null;
+const PREFIX = String(E.BOTSTREAM_NAMESPACE || 'botstream:production').replace(/[^a-zA-Z0-9:_-]/g, '').slice(0, 80);
+const REDIS_USERS = PREFIX + ':v1:users';
+const REDIS_SESSIONS = PREFIX + ':v1:sessions';
+const REDIS_LOCK = PREFIX + ':v1:write-lock';
+const overlayKey = token => PREFIX + ':v1:overlay:' + token;
+const userKey = slug => PREFIX + ':v1:user:' + encodeURIComponent(slug);
+const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+const parseStored = value => {
+  if (value == null) return null;
+  if (typeof value !== 'string') return value;
+  try { return JSON.parse(value); } catch { return null; }
+};
+async function acquireRedisLock() {
+  const token = crypto.randomBytes(16).toString('hex'), deadline = Date.now() + 15000;
+  while (Date.now() < deadline) {
+    const result = await REDIS.set(REDIS_LOCK, token, { nx: true, ex: 60 });
+    if (result === 'OK' || result === true) return token;
+    await pause(120);
+  }
+  throw new Error('The data store is busy. Please retry.');
+}
+async function releaseRedisLock(token) {
+  if (!token) return;
+  await REDIS.eval(
+    'if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) else return 0 end',
+    [REDIS_LOCK], [token]
+  );
+}
+async function loadRedisDb() {
+  const slugs = await REDIS.smembers(REDIS_USERS) || [], users = {};
+  for (let i = 0; i < slugs.length; i += 50) {
+    const group = slugs.slice(i, i + 50);
+    const values = await REDIS.mget(...group.map(userKey));
+    group.forEach((slug, j) => {
+      const value = parseStored(values[j]);
+      if (value) users[slug] = value;
+    });
+  }
+  const sessions = await REDIS.hgetall(REDIS_SESSIONS) || {};
+  return { users, sessions };
+}
+function remoteSnapshot(state) {
+  return {
+    users: Object.fromEntries(Object.entries(state.users).map(([slug, user]) => [slug, JSON.stringify(user)])),
+    sessions: { ...state.sessions }
+  };
+}
+async function persistRedisDb(state, before) {
+  const tasks = [];
+  for (const [slug, user] of Object.entries(state.users)) {
+    const serialized = JSON.stringify(user);
+    if (before.users[slug] === serialized) continue;
+    tasks.push(REDIS.set(userKey(slug), serialized));
+    tasks.push(REDIS.sadd(REDIS_USERS, slug));
+    if (user.alertToken) {
+      tasks.push(REDIS.set(overlayKey(user.alertToken), JSON.stringify({
+        cursor: user.eventSeq || 0,
+        events: user.events || [],
+        stats: stats(user)
+      })));
+    }
+    const oldUser = parseStored(before.users[slug]);
+    if (oldUser && oldUser.alertToken && oldUser.alertToken !== user.alertToken) {
+      tasks.push(REDIS.del(overlayKey(oldUser.alertToken)));
+    }
+  }
+  for (const slug of Object.keys(before.users)) {
+    if (state.users[slug]) continue;
+    const oldUser = parseStored(before.users[slug]);
+    tasks.push(REDIS.del(userKey(slug)));
+    tasks.push(REDIS.srem(REDIS_USERS, slug));
+    if (oldUser && oldUser.alertToken) tasks.push(REDIS.del(overlayKey(oldUser.alertToken)));
+  }
+  const tokens = new Set([...Object.keys(before.sessions), ...Object.keys(state.sessions)]);
+  for (const token of tokens) {
+    if (before.sessions[token] === state.sessions[token]) continue;
+    if (state.sessions[token]) tasks.push(REDIS.hset(REDIS_SESSIONS, { [token]: state.sessions[token] }));
+    else tasks.push(REDIS.hdel(REDIS_SESSIONS, token));
+  }
+  await Promise.all(tasks);
+  state.__dirty = false;
+}
 const rid = () => crypto.randomBytes(16).toString('hex');
 const hash = (p, s) => crypto.scryptSync(String(p), s, 32).toString('hex');
 const clients = {}, hits = {}, chatIds = {};
-const send = (u, ev) => (clients[u.alertToken] || []).forEach(r => r.write('data: ' + JSON.stringify(ev) + '\n\n'));
+const send = (u, ev) => {
+  u.eventSeq = (u.eventSeq || 0) + 1;
+  u.events = u.events || [];
+  const event = { id: u.eventSeq, at: Date.now(), data: ev };
+  u.events.push(event);
+  if (u.events.length > 200) u.events.splice(0, u.events.length - 200);
+  save();
+  (clients[u.alertToken] || []).forEach(r => r.write('data: ' + JSON.stringify(ev) + '\n\n'));
+  if (ably) {
+    const pending = ably.channels.get(channelName(u.alertToken)).publish('event', event)
+      .catch(error => console.error('BotStream realtime publish failed:', error));
+    const state = currentDb();
+    state.__pendingPublishes = state.__pendingPublishes || [];
+    state.__pendingPublishes.push(pending);
+  }
+};
 const usd = t => t.currency === 'KHR' ? t.amount / KHR_RATE : t.amount;
 const DEF = { spinMin: 10, timerPerUsd: 1, scareMin: 20, mediaMin: 2, pointsPerUsd: 10, tgChat: '', ytVideo: '', discordHook: '' };
 const DEFREDEEMS = [{ id: 'r1', title: 'Jumpscare', cost: 200, kind: 'scare' }, { id: 'r2', title: 'Spin the wheel', cost: 100, kind: 'spin' }, { id: 'r3', title: 'Shoutout', cost: 50, kind: 'alert' }];
@@ -22,9 +138,24 @@ const acct = (u, name, pass) => { const a = pts(u)[pkey(name)]; return a && a.pa
 const SLICES = ['Shoutout', 'Song request', 'Ask me anything', 'Try again'];
 const cfg = u => ({ ...DEF, ...u.cfg });
 const ip = req => (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || '';
-function limited(req, key, max) {
-  const k = key + ip(req), now = Date.now(), h = hits[k] = (hits[k] || []).filter(t => now - t < 60000);
-  h.push(now); return h.length > max;
+async function limited(req, key, max) {
+  const now = Date.now(), identity = ip(req);
+  if (VERCEL) {
+    const bucket = PREFIX + ':v1:rate:' + key + ':' +
+      crypto.createHash('sha256').update(identity).digest('hex');
+    const count = await REDIS.eval(
+      "redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', ARGV[1]); " +
+      "local n = redis.call('ZCARD', KEYS[1]); " +
+      "if n >= tonumber(ARGV[2]) then return n + 1 end; " +
+      "redis.call('ZADD', KEYS[1], ARGV[3], ARGV[4]); " +
+      "redis.call('PEXPIRE', KEYS[1], 60000); return n + 1",
+      [bucket], [now - 60000, max, now, now + ':' + rid()]
+    );
+    return Number(count) > max;
+  }
+  const k = key + identity, h = hits[k] = (hits[k] || []).filter(t => now - t < 60000);
+  h.push(now);
+  return h.length > max;
 }
 const dc = (hook, content) => hook && /^https:\/\/(discord|discordapp)\.com\/api\/webhooks\//.test(hook) && fetch(hook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: String(content).slice(0, 1900) }) }).catch(() => {});
 const tg = (chat, text) => E.TELEGRAM_BOT_TOKEN && chat && fetch('https://api.telegram.org/bot' + E.TELEGRAM_BOT_TOKEN + '/sendMessage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: chat, text }) }).catch(() => {});
@@ -117,19 +248,38 @@ const newUser = (slug, salt) => ({ slug, name: slug, salt, pass: '', rec: '', cr
 
 // Single-owner mode: set OWNER_PASSWORD and the server has one account, made from your settings. Signups are closed.
 const SINGLE = !!E.OWNER_PASSWORD, OWNER = (E.OWNER_SLUG || 'owner').toLowerCase();
-if (SINGLE) {
+if (SINGLE && !VERCEL) {
   const o = db.users[OWNER] = db.users[OWNER] || newUser(OWNER, rid());
   o.pass = hash(E.OWNER_PASSWORD, o.salt);
   if (E.ALERT_TOKEN) o.alertToken = E.ALERT_TOKEN;   // fixed links keep working after restarts
   if (E.NOTIFY_TOKEN) o.notifyToken = E.NOTIFY_TOKEN;
   save();
 }
+function ensureOwner() {
+  if (!SINGLE) return;
+  const existed = !!db.users[OWNER];
+  const o = db.users[OWNER] || newUser(OWNER, rid());
+  db.users[OWNER] = o;
+  const nextPass = hash(E.OWNER_PASSWORD, o.salt);
+  let changed = !existed || o.pass !== nextPass;
+  o.pass = nextPass;
+  if (E.ALERT_TOKEN && o.alertToken !== E.ALERT_TOKEN) { o.alertToken = E.ALERT_TOKEN; changed = true; }
+  if (E.NOTIFY_TOKEN && o.notifyToken !== E.NOTIFY_TOKEN) { o.notifyToken = E.NOTIFY_TOKEN; changed = true; }
+  if (changed) save();
+}
 
-http.createServer(async (req, res) => {
+async function app(req, res) {
   res.setHeader('X-Content-Type-Options', 'nosniff'); res.setHeader('Referrer-Policy', 'no-referrer');
   const url = new URL(req.url, 'http://x'), p = url.pathname, m = req.method, q = url.searchParams;
-  const raw = m === 'POST' ? await rawBody(req) : '';
-  let b = {}; try { b = JSON.parse(raw); } catch {}
+  let raw = '';
+  if (m === 'POST') {
+    if (req.body !== undefined) raw = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
+    else raw = await rawBody(req);
+  }
+  let b = {};
+  if (req.body && typeof req.body === 'object' && !Buffer.isBuffer(req.body)) b = req.body;
+  else { try { b = JSON.parse(raw); } catch {} }
+  if (Buffer.byteLength(raw) > 3e6) return json(res, { error: 'Request body is too large.' }, 413);
 
   if (p === '/healthz') { res.writeHead(200); return res.end('ok'); }
   if (p === '/api/config') return json(res, { single: SINGLE });
@@ -144,7 +294,7 @@ http.createServer(async (req, res) => {
 
   if (p === '/api/register' && m === 'POST') {
     if (SINGLE) return json(res, { error: 'Registration is closed.' }, 403);
-    if (limited(req, 'reg', 5)) return json(res, { error: 'Too many tries. Wait a minute.' }, 429);
+    if (await limited(req, 'reg', 5)) return json(res, { error: 'Too many tries. Wait a minute.' }, 429);
     const slug = String(b.slug || '').toLowerCase();
     if (!/^[a-z0-9_]{3,20}$/.test(slug) || String(b.password || '').length < 6) return json(res, { error: 'Username: 3 to 20 letters or numbers. Password: at least 6 characters.' }, 400);
     if (db.users[slug]) return json(res, { error: 'That username is taken.' }, 409);
@@ -153,14 +303,14 @@ http.createServer(async (req, res) => {
     return login(res, slug, { recovery: rec });
   }
   if (p === '/api/login' && m === 'POST') {
-    if (limited(req, 'login', 10)) return json(res, { error: 'Too many tries. Wait a minute.' }, 429);
+    if (await limited(req, 'login', 10)) return json(res, { error: 'Too many tries. Wait a minute.' }, 429);
     const u = db.users[String(b.slug || '').toLowerCase()];
     if (!u || hash(b.password, u.salt) !== u.pass) return json(res, { error: 'Wrong username or password.' }, 401);
     return login(res, u.slug);
   }
   if (p === '/api/reset' && m === 'POST') {
     if (SINGLE) return json(res, { error: 'To reset, change OWNER_PASSWORD on the server and restart.' }, 403);
-    if (limited(req, 'reset', 5)) return json(res, { error: 'Too many tries. Wait a minute.' }, 429);
+    if (await limited(req, 'reset', 5)) return json(res, { error: 'Too many tries. Wait a minute.' }, 429);
     const u = db.users[String(b.slug || '').toLowerCase()];
     if (!u || String(b.password || '').length < 6 || hash(b.recovery, u.salt) !== u.rec) return json(res, { error: 'Recovery code or password is not valid.' }, 401);
     u.pass = hash(b.password, u.salt); return login(res, u.slug);
@@ -170,7 +320,7 @@ http.createServer(async (req, res) => {
     return u ? json(res, { name: u.name, khqr: u.khqr, poll: pubPoll(u), pred: pubPred(u), mediaMin: cfg(u).mediaMin, pointsPerUsd: cfg(u).pointsPerUsd, redeems: u.redeems || DEFREDEEMS }) : json(res, { error: 'Not found' }, 404);
   }
   if (p.startsWith('/api/pay/') && m === 'POST') {
-    if (limited(req, 'pay', 20)) return json(res, { error: 'Too many tries. Wait a minute.' }, 429);
+    if (await limited(req, 'pay', 20)) return json(res, { error: 'Too many tries. Wait a minute.' }, 429);
     const u = db.users[p.slice(9)], amount = +b.amount;
     if (!u || !(amount > 0) || !['USD', 'KHR'].includes(b.currency)) return json(res, { error: 'Check the amount.' }, 400);
     let media;
@@ -186,7 +336,7 @@ http.createServer(async (req, res) => {
     return json(res, { ok: true });
   }
   if (p.startsWith('/api/vote/') && m === 'POST') {
-    if (limited(req, 'vote', 30)) return json(res, { error: 'Too many tries.' }, 429);
+    if (await limited(req, 'vote', 30)) return json(res, { error: 'Too many tries.' }, 429);
     const u = db.users[p.slice(10)], pl = u && u.poll, o = pl && pl.options[+b.i];
     if (!pl || !pl.open || !o) return json(res, { error: 'Voting is closed.' }, 400);
     const who = crypto.createHash('sha256').update(ip(req) + pl.id).digest('hex').slice(0, 16);
@@ -194,12 +344,12 @@ http.createServer(async (req, res) => {
     pl.voters.push(who); o.v++; save(); send(u, stats(u)); return json(res, { ok: true });
   }
   if (p.startsWith('/api/points/') && m === 'POST') {
-    if (limited(req, 'points', 30)) return json(res, { error: 'Too many tries.' }, 429);
+    if (await limited(req, 'points', 30)) return json(res, { error: 'Too many tries.' }, 429);
     const u = db.users[p.slice(12)], a = u && acct(u, b.name, b.passcode);
     return a ? json(res, { points: a.p, name: a.name }) : json(res, { error: 'Wrong name or passcode. Your passcode is set with your first paid tip.' }, 401);
   }
   if (p.startsWith('/api/redeem/') && m === 'POST') {
-    if (limited(req, 'redeem', 20)) return json(res, { error: 'Too many tries.' }, 429);
+    if (await limited(req, 'redeem', 20)) return json(res, { error: 'Too many tries.' }, 429);
     const u = db.users[p.slice(12)], a = u && acct(u, b.name, b.passcode);
     if (!a) return json(res, { error: 'Wrong name or passcode.' }, 401);
     const r = (u.redeems || DEFREDEEMS).find(x => x.id === b.id);
@@ -211,7 +361,7 @@ http.createServer(async (req, res) => {
     return json(res, { ok: true, points: a.p });
   }
   if (p.startsWith('/api/bet/') && m === 'POST') {
-    if (limited(req, 'bet', 30)) return json(res, { error: 'Too many tries.' }, 429);
+    if (await limited(req, 'bet', 30)) return json(res, { error: 'Too many tries.' }, 429);
     const u = db.users[p.slice(9)], a = u && acct(u, b.name, b.passcode), pr = u && u.pred, amt = Math.floor(+b.amount), i = Math.floor(+b.i);
     if (!a) return json(res, { error: 'Wrong name or passcode.' }, 401);
     if (!pr || pr.state !== 'open') return json(res, { error: 'Betting is closed.' }, 400);
@@ -223,11 +373,28 @@ http.createServer(async (req, res) => {
     save(); send(u, stats(u)); return json(res, { ok: true, points: a.p });
   }
   if (p.startsWith('/api/notify/') && m === 'POST') {
-    if (limited(req, 'notify', 60)) return json(res, { error: 'Too many requests.' }, 429);
+    if (await limited(req, 'notify', 60)) return json(res, { error: 'Too many requests.' }, 429);
     const u = byToken('notifyToken', p.slice(12));
     if (!u) return json(res, { error: 'Bad token' }, 404);
     return json(res, { matched: handleNote(u, String(b.text || b.message || raw)) });
   }
+  if (p === '/api/ably-token' && m === 'GET') {
+    const owner = byToken('alertToken', q.get('token') || '');
+    if (!owner || !ably) return json(res, { error: 'Realtime is not configured.' }, 501);
+    try {
+      const tokenRequest = await ably.auth.createTokenRequest({
+        clientId: 'overlay-' + rid(),
+        capability: { [channelName(owner.alertToken)]: ['subscribe'] },
+        ttl: 60 * 60 * 1000
+      });
+      res.setHeader('Cache-Control', 'no-store');
+      return json(res, tokenRequest);
+    } catch (error) {
+      console.error('BotStream realtime token error:', error);
+      return json(res, { error: 'Could not authorize overlay connection.' }, 503);
+    }
+  }
+
   if (p === '/api/tts') { // Khmer voice from Google Cloud Text-to-Speech, when GOOGLE_TTS_KEY is set
     const u = byToken('alertToken', q.get('token') || '');
     if (!u || !E.GOOGLE_TTS_KEY) { res.writeHead(501); return res.end(); }
@@ -244,12 +411,15 @@ http.createServer(async (req, res) => {
   }
   if (p.startsWith('/events/')) {
     const u = byToken('alertToken', p.slice(8));
-    if (!u) { res.writeHead(404); return res.end(); }
-    res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
-    (clients[u.alertToken] = clients[u.alertToken] || []).push(res);
-    res.write('data: ' + JSON.stringify(stats(u)) + '\n\n');
-    const ka = setInterval(() => res.write(': ping\n\n'), 25000);
-    return req.on('close', () => { clearInterval(ka); clients[u.alertToken] = clients[u.alertToken].filter(r => r !== res); });
+    if (!u) return json(res, { error: 'Not found' }, 404);
+    const hasCursor = q.has('since');
+    const since = Math.max(0, Number(q.get('since') || 0));
+    res.setHeader('Cache-Control', 'no-store');
+    return json(res, {
+      events: hasCursor ? (u.events || []).filter(event => event.id > since) : [],
+      cursor: u.eventSeq || 0,
+      stats: stats(u)
+    });
   }
 
   if (p === '/api/admin/users' && adminOk(req)) return json(res, Object.values(db.users).map(u => ({ slug: u.slug, created: u.created, tips: u.tips.length, raised: +u.tips.reduce((s, t) => s + usd(t), 0).toFixed(2) })));
@@ -312,4 +482,92 @@ http.createServer(async (req, res) => {
     tg(c.tgChat, text); dc(c.discordHook, text); return json(res, { ok: true });
   }
   res.writeHead(404); res.end('Not found');
-}).listen(PORT, () => console.log('LiveTip KH running on http://localhost:' + PORT));
+}
+
+async function handleRequest(req, res) {
+  if (!VERCEL) {
+    return requestContext.run(localDb, async () => app(req, res));
+  }
+
+  let lockToken = null;
+  try {
+    const pathName = new URL(req.url, 'http://vercel').pathname;
+    if (req.method === 'GET' && pathName.startsWith('/events/')) {
+      const token = pathName.slice(8);
+      const snapshot = parseStored(await REDIS.get(overlayKey(token)));
+      if (!snapshot) return json(res, { error: 'Not found' }, 404);
+      const eventUrl = new URL(req.url, 'http://vercel');
+      const hasCursor = eventUrl.searchParams.has('since');
+      const since = Math.max(0, Number(eventUrl.searchParams.get('since') || 0));
+      res.setHeader('Cache-Control', 'no-store');
+      return json(res, {
+        events: hasCursor ? (snapshot.events || []).filter(event => event.id > since) : [],
+        cursor: snapshot.cursor || 0,
+        stats: snapshot.stats
+      });
+    }
+
+    const needsLock = req.method === 'POST' || SINGLE;
+    if (needsLock) lockToken = await acquireRedisLock();
+    const state = await loadRedisDb();
+    const before = remoteSnapshot(state);
+
+    return await requestContext.run(state, async () => {
+      ensureOwner();
+
+      const originalWriteHead = res.writeHead.bind(res);
+      const originalEnd = res.end.bind(res);
+      let pendingHeaders = null, finishPromise = null;
+      res.writeHead = (...args) => { pendingHeaders = args; return res; };
+      res.end = (...args) => {
+        if (finishPromise) return res;
+        finishPromise = (async () => {
+          let finalArgs = args;
+          try {
+            if (state.__dirty) await persistRedisDb(state, before);
+            if (state.__pendingPublishes && state.__pendingPublishes.length) {
+              await Promise.all(state.__pendingPublishes);
+            }
+          } catch (error) {
+            console.error('BotStream storage write failed:', error);
+            pendingHeaders = null;
+            res.statusCode = 503;
+            res.setHeader('Content-Type', 'application/json; charset=utf-8');
+            res.setHeader('Cache-Control', 'no-store');
+            res.removeHeader('Location');
+            finalArgs = [JSON.stringify({ error: 'Persistent storage is temporarily unavailable. Please retry.' })];
+          } finally {
+            if (lockToken) {
+              try { await releaseRedisLock(lockToken); }
+              catch (error) { console.error('BotStream storage lock release failed:', error); }
+            }
+          }
+          if (pendingHeaders) originalWriteHead(...pendingHeaders);
+          originalEnd(...finalArgs);
+        })();
+        return res;
+      };
+
+      try { await app(req, res); }
+      catch (error) {
+        console.error('BotStream request failed:', error);
+        if (!finishPromise) json(res, { error: 'Internal server error.' }, 500);
+      }
+      if (finishPromise) await finishPromise;
+      else if (lockToken) await releaseRedisLock(lockToken);
+    });
+  } catch (error) {
+    console.error('BotStream serverless handler failed:', error);
+    if (lockToken) {
+      try { await releaseRedisLock(lockToken); } catch {}
+    }
+    if (!res.headersSent) return json(res, { error: 'Service temporarily unavailable. Check the Vercel storage configuration.' }, 503);
+    return res.end();
+  }
+}
+
+if (require.main === module) {
+  http.createServer((req, res) => handleRequest(req, res))
+    .listen(PORT, () => console.log('LiveTip KH running on http://localhost:' + PORT));
+}
+module.exports = { handleRequest };
