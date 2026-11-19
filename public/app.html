@@ -1,119 +1,182 @@
 <!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Dashboard</title>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Khmer:wght@400;700&family=Instrument+Sans:wght@400;600&display=swap" rel="stylesheet">
+<title>BotStream Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Khmer:wght@400;700&family=Sora:wght@400;600&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/botstream.css">
 <style>
-:root{--bg:#f3f1fa;--card:#fff;--ink:#1e1b3a;--mut:#5d5a7a;--line:#d9d5ec;--acc:#ff4d6d}
-@media (prefers-color-scheme:dark){:root{--bg:#14122a;--card:#1d1a3a;--ink:#f1eefc;--mut:#a9a5c9;--line:#312d5a}}
-body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Instrument Sans","Noto Sans Khmer",system-ui,sans-serif;padding:20px 16px 60px}
-main{max-width:720px;margin:0 auto}h1{font-size:30px;margin:0 0 18px}h2{font-size:20px;margin:0 0 10px}
-section{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:20px;margin-bottom:16px}
-label{display:block;font-weight:600;margin:12px 0 5px}
-input,textarea{width:100%;font:inherit;color:inherit;background:transparent;border:1px solid var(--line);border-radius:10px;padding:10px 12px}input[type=checkbox]{width:auto;accent-color:var(--acc)}textarea{resize:vertical;min-height:76px}
-button{font-weight:600;font-size:16px;font-family:inherit;background:var(--acc);color:#fff;border:0;border-radius:999px;padding:10px 20px;cursor:pointer;margin:12px 8px 0 0}
-button.alt{background:transparent;color:var(--ink);border:2px solid var(--ink);padding:6px 14px;margin:0}
-.link{display:flex;gap:8px;align-items:center;margin:8px 0}.link code{flex:1;overflow:auto;white-space:nowrap;background:var(--bg);padding:8px 10px;border-radius:8px;font-size:13px}
-.mut{color:var(--mut);font-size:14px}.err{color:var(--acc)}li{margin:4px 0}img{max-width:180px;border-radius:10px;display:block;margin-top:8px}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}.warn{border:2px solid var(--acc)}
-:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+.authwrap{min-height:100vh;display:grid;place-items:center;padding:20px}
+.authwrap .card{width:100%;max-width:420px}
+.authwrap h1{font-size:32px;margin-bottom:4px}
+.panel[hidden]{display:none}
+.img-prev{max-width:180px;border-radius:12px;display:block;margin-top:8px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 </style></head>
-<body><main>
-<h1>Creator dashboard</h1>
+<body>
 
-<section id="auth"><h2 id="ah">Log in or create an account</h2>
-  <label for="u">Username</label><input id="u" autocomplete="username"><label for="p">Password</label><input id="p" type="password" autocomplete="current-password">
-  <button onclick="auth('login')">Log in</button><button class="alt" id="regbtn" onclick="auth('register')">Create account</button>
-  <p class="mut" id="forgot"><a href="#" onclick="$('rs').hidden=false;return false">Forgot your password?</a></p>
-  <div class="err" id="ae"></div>
-  <div id="rs" hidden><label for="rc">Recovery code (shown when you created the account)</label><input id="rc"><label for="np">New password</label><input id="np" type="password"><button onclick="reset()">Set new password</button></div>
-</section>
+<div class="authwrap" id="auth">
+  <div class="card">
+    <div class="brand" style="margin:0 0 14px"><i>✦</i>BotStream</div>
+    <h1 id="ah">Log in or create an account</h1><p class="mut">Tip alerts, overlays, fan cards and live tools for your stream.</p>
+    <label for="u">Username</label><input id="u" autocomplete="username"><label for="p">Password</label><input id="p" type="password" autocomplete="current-password">
+    <button onclick="auth('login')">Log in</button><button class="alt" id="regbtn" onclick="auth('register')">Create account</button>
+    <p class="mut" id="forgot"><a href="#" onclick="$('rs').hidden=false;return false">Forgot your password?</a></p>
+    <div class="err" id="ae"></div>
+    <div id="rs" hidden><label for="rc">Recovery code (shown when you created the account)</label><input id="rc"><label for="np">New password</label><input id="np" type="password"><button onclick="reset()">Set new password</button></div>
+  </div>
+</div>
 
-<section id="rec" class="warn" hidden><h2>Save your recovery code</h2><p>This is the only way to reset your password. It is shown once.</p><div class="link"><code id="rcode"></code></div><button onclick="$('rec').hidden=true">I saved it</button></section>
+<div id="rec" class="authwrap" hidden><div class="card warn"><h2>Save your recovery code</h2><p class="mut">This is the only way to reset your password. It is shown once.</p><div class="link"><code id="rcode"></code></div><button onclick="$('rec').hidden=true">I saved it</button></div></div>
 
-<div id="dash" hidden>
-  <section><h2>Your links</h2><div id="links"></div>
-    <p class="mut">In OBS: add a Browser Source, paste an overlay link, and set the size to your canvas (for example 1920 by 1080).</p></section>
+<div class="shell" id="dash" hidden>
+  <nav class="side" role="tablist" aria-label="Dashboard sections">
+    <div class="brand"><i>✦</i>BotStream</div>
+    <button class="tab" role="tab" data-tab="live" aria-selected="true">📡 Live</button>
+    <button class="tab" role="tab" data-tab="overlays" aria-selected="false">🎬 Overlays</button>
+    <button class="tab" role="tab" data-tab="engage" aria-selected="false">🗳️ Engage</button>
+    <button class="tab" role="tab" data-tab="cards" aria-selected="false">🃏 Cards</button>
+    <button class="tab" role="tab" data-tab="website" aria-selected="false">🌐 Website</button>
+    <button class="tab" role="tab" data-tab="settings" aria-selected="false">⚙️ Settings</button>
+    <div class="grow"></div>
+    <button class="tab" onclick="logout()">↩ Log out</button>
+  </nav>
 
+  <div class="main">
+    <header><div><h1 id="title" class="grad-text">Dashboard</h1><p class="mut" id="sub"></p></div><span class="mut"><span class="dot off" id="conn"></span><span id="connt">Connecting…</span></span></header>
 
-  <section><h2>Official creator website</h2>
-    <p class="mut">Build a public home for your brand, links and content. Anyone can view this page, so only publish details and links you want public.</p>
-    <div class="grid">
-      <div><label for="siteTitle">Website display name</label><input id="siteTitle" maxlength="60" placeholder="Your creator name"></div>
-      <div><label for="siteTagline">Headline / tagline</label><input id="siteTagline" maxlength="140" placeholder="Creator · Gamer · Tech"></div>
-      <div><label for="siteLocation">Location / region</label><input id="siteLocation" maxlength="80" placeholder="Cambodia"></div>
-      <div><label for="siteTheme">Accent color (hex)</label><input id="siteTheme" maxlength="7" placeholder="#f05b78"></div>
-      <div><label for="siteAvatar">Profile image URL</label><input id="siteAvatar" type="url" placeholder="https://..."></div>
-      <div><label for="siteCover">Banner image URL</label><input id="siteCover" type="url" placeholder="https://..."></div>
-      <div><label for="siteEmail">Public business email</label><input id="siteEmail" type="email" placeholder="you@example.com"></div>
-      <div><label for="siteTelegram">Telegram contact link</label><input id="siteTelegram" type="url" placeholder="https://t.me/yourname"></div>
-      <div><label for="siteSchedule">Streaming schedule</label><input id="siteSchedule" maxlength="240" placeholder="Mon–Fri · 8 PM Cambodia time"></div>
-      <div><label for="siteLiveUrl">Live stream URL</label><input id="siteLiveUrl" type="url" placeholder="https://youtube.com/..."></div>
+    <!-- LIVE -->
+    <div class="panel" data-panel="live">
+      <div class="stats">
+        <div class="card stat"><b id="stRaised">$0</b><span>Raised</span></div>
+        <div class="card stat"><b id="stGoal">0%</b><span id="stGoalT">Goal</span></div>
+        <div class="card stat"><b id="stTop">–</b><span>Top donor</span></div>
+        <div class="card stat"><b id="stFans">0</b><span>Fans with points</span></div>
+      </div>
+      <section class="card"><h2>Live donation feed</h2><p class="mut">New tips, redeems, card pulls and battles appear here instantly. Works from your phone while you stream.</p>
+        <div class="row"><button class="sm" onclick="act('skip')">⏭ Skip current alert</button><button class="alt sm" style="margin:0" onclick="act('test')">Test alert</button><button class="alt sm" style="margin:0" onclick="act('test-card')">Test card pull</button></div>
+        <div class="feed" id="feed" style="margin-top:12px"><div class="mut" id="feedEmpty">No activity yet. Send a test alert to try your overlay.</div></div>
+      </section>
+      <section class="card"><h2>Live controls</h2>
+        <div class="row"><button class="sm" onclick="act('spin')">Test spin</button><button class="sm" onclick="raffle('draw')">Draw raffle winner</button><button class="alt sm" style="margin:0" onclick="raffle('clear')">Clear raffle</button><span id="rn" class="mut"></span></div>
+        <label for="tm">Subathon timer (minutes)</label><input id="tm" type="number" min="1" placeholder="60">
+        <button onclick="timer(+$('tm').value)">Start timer</button><button class="alt" onclick="timer(0)">Stop timer</button>
+        <button class="alt" onclick="announce()">Announce I’m live (Telegram, Discord)</button> <span id="lm" class="mut"></span>
+      </section>
     </div>
-    <label for="siteQuote">Signature quote / creator motto</label><input id="siteQuote" maxlength="180" placeholder="Turning passion into impact.">
-    <label for="siteMetrics">Audience metrics — one per line: platform | count (max 4)</label><textarea id="siteMetrics" placeholder="Facebook | 900K+&#10;YouTube | 549K+&#10;TikTok | 280K+"></textarea>
-    <label for="roomWelcome">Live Lounge welcome message</label><input id="roomWelcome" maxlength="160" placeholder="Be kind, have fun and hype up the creator!">
-    <label><input id="chatEnabled" type="checkbox" checked> Enable public audience chat</label>
-    <label for="slowMode">Chat slow mode (seconds between messages per visitor)</label><input id="slowMode" type="number" min="0" max="30" value="0">
-    <label for="siteBio">About / creator introduction</label><textarea id="siteBio" rows="4" maxlength="1800" placeholder="Tell your audience who you are, what you create and why it matters."></textarea>
-    <label><input id="siteLive" type="checkbox"> I am live now (manual status)</label>
-    <p class="mut">The LIVE badge is manual. Set your stream URL above; automatic platform live detection is not enabled yet.</p>
-    <label for="siteSocials">Social channels — one per line: platform | URL</label><textarea id="siteSocials" placeholder="YouTube | https://youtube.com/@yourname&#10;TikTok | https://tiktok.com/@yourname"></textarea>
-    <label for="siteVideos">Featured videos / projects — one per line: title | description | URL</label><textarea id="siteVideos" placeholder="Latest stream | Watch the latest episode | https://youtu.be/..."></textarea>
-    <label for="siteArticles">Articles / updates — one per line: title | excerpt | URL</label><textarea id="siteArticles" placeholder="Staying safe online | A quick guide for the community | https://..."></textarea>
-    <label for="siteCommunities">Community links — one per line: name | description | URL</label><textarea id="siteCommunities" placeholder="Discord | Join the community | https://discord.gg/..."></textarea>
-    <label for="sitePartners">Partners — one per line: name | URL</label><textarea id="sitePartners" placeholder="Partner brand | https://example.com"></textarea>
-    <button onclick="saveProfile()">Save public website</button> <span class="mut" id="profileStatus"></span>
-    <div class="link"><code id="creatorUrl"></code><button class="alt" onclick="copy('creatorUrl')">Copy website link</button></div>
-    <p class="mut"><a id="previewCreator" href="#" target="_blank" rel="noopener">Preview your public creator website ↗</a></p>
-    <div class="link"><code id="liveRoomUrl"></code><button class="alt" onclick="copy('liveRoomUrl')">Copy Live Lounge link</button></div>
-    <p class="mut"><a id="previewLiveRoom" href="#" target="_blank" rel="noopener">Open your audience Live Lounge ↗</a></p>
-  </section>
-  <section><h2>Audience chat moderation</h2><p class="mut">Review recent public messages and remove messages that break your room rules.</p>
-    <button class="alt" onclick="moderateChat('clear')">Clear all room messages</button><div id="roomModeration" class="mut"></div><span id="moderationStatus" class="mut"></span>
-  </section>
-  <section><h2>Live controls</h2><p class="mut">Works from your phone while you stream.</p>
-    <button onclick="act('test')">Test alert</button><button onclick="act('skip')">Skip alert</button><button onclick="act('spin')">Test spin</button>
-    <button onclick="raffle('draw')">Draw raffle winner</button><button class="alt" onclick="raffle('clear')">Clear raffle</button> <span id="rn" class="mut"></span>
-    <label for="tm">Subathon timer (minutes)</label><input id="tm" type="number" min="1" placeholder="60">
-    <button onclick="timer(+$('tm').value)">Start timer</button><button class="alt" onclick="timer(0)">Stop timer</button>
-    <button class="alt" onclick="announce()">Announce I’m live (Telegram, Discord)</button> <span id="lm" class="mut"></span></section>
 
-  <section><h2>Poll</h2>
-    <label for="pq">Question</label><input id="pq" maxlength="80"><label for="po">Options, separated by commas</label><input id="po" placeholder="Game A, Game B, Game C">
-    <button onclick="poll('new')">Start poll</button><button class="alt" onclick="poll('close')">Close</button> <button class="alt" onclick="poll('clear')">Clear</button> <span id="pm" class="err"></span></section>
+    <!-- OVERLAYS -->
+    <div class="panel" data-panel="overlays" hidden>
+      <section class="card"><h2>Your links</h2><div id="links"></div>
+        <p class="mut">In OBS: add a Browser Source, paste an overlay link, and set the size to your canvas (for example 1920 by 1080).</p></section>
+      <section class="card"><h2>Connect your bank notifications</h2>
+        <p class="mut">Each time your bank sends a payment notification, send its text to this address. See the README for phone setup. Keep this link private: anyone who has it can fake a tip.</p>
+        <div class="link"><code id="nh"></code><button class="alt" onclick="copy('nh')">Copy</button></div></section>
+    </div>
 
-  <section><h2>Prediction (viewers bet fan points)</h2>
-    <label for="dq">Question</label><input id="dq" maxlength="80" placeholder="Will I win this round?"><label for="do">2 or 3 outcomes, separated by commas</label><input id="do" placeholder="Yes, No">
-    <button onclick="pred('new')">Start prediction</button><button class="alt" onclick="pred('lock')">Lock bets</button><button class="alt" onclick="pred('cancel')">Cancel and refund</button><button class="alt" onclick="pred('clear')">Clear</button>
-    <label for="dw">Winning outcome number (1, 2 or 3)</label><input id="dw" type="number" min="1" max="3"><button onclick="pred('resolve')">Pay out winners</button> <span id="dm" class="err"></span></section>
+    <!-- ENGAGE -->
+    <div class="panel" data-panel="engage" hidden>
+      <section class="card"><h2>Poll</h2>
+        <label for="pq">Question</label><input id="pq" maxlength="80"><label for="po">Options, separated by commas</label><input id="po" placeholder="Game A, Game B, Game C">
+        <button onclick="poll('new')">Start poll</button><button class="alt" onclick="poll('close')">Close</button><button class="alt" onclick="poll('clear')">Clear</button> <span id="pm" class="err"></span></section>
+      <section class="card"><h2>Prediction (viewers bet fan points)</h2>
+        <label for="dq">Question</label><input id="dq" maxlength="80" placeholder="Will I win this round?"><label for="do">2 or 3 outcomes, separated by commas</label><input id="do" placeholder="Yes, No">
+        <button onclick="pred('new')">Start prediction</button><button class="alt" onclick="pred('lock')">Lock bets</button><button class="alt" onclick="pred('cancel')">Cancel and refund</button><button class="alt" onclick="pred('clear')">Clear</button>
+        <label for="dw">Winning outcome number (1, 2 or 3)</label><input id="dw" type="number" min="1" max="3"><button onclick="pred('resolve')">Pay out winners</button> <span id="dm" class="err"></span></section>
+      <section class="card"><h2>Audience chat moderation</h2><p class="mut">Review recent public messages and remove messages that break your room rules.</p>
+        <button class="alt" onclick="moderateChat('clear')">Clear all room messages</button><div id="roomModeration" class="mut" style="margin-top:10px"></div><span id="moderationStatus" class="mut"></span></section>
+    </div>
 
-  <section><h2>Settings</h2>
-    <div class="grid"><div><label for="dn">Display name</label><input id="dn" maxlength="30"></div><div></div>
-    <div><label for="gt">Goal title</label><input id="gt" maxlength="40"></div><div><label for="gg">Goal amount (USD)</label><input id="gg" type="number" min="1"></div>
-    <div><label for="sm">Spin the wheel at (USD, 0 = off)</label><input id="sm" type="number" min="0"></div><div><label for="ss">Jumpscare at (USD, 0 = off)</label><input id="ss" type="number" min="0"></div>
-    <div><label for="tp">Timer minutes added per $1</label><input id="tp" type="number" min="0" step="any"></div><div><label for="mm">Media share from (USD)</label><input id="mm" type="number" min="0" step="any"></div>
-    <div><label for="tc">Telegram chat ID</label><input id="tc"></div><div><label for="yv">YouTube live video ID</label><input id="yv" maxlength="11"></div>
-    <div><label for="pp">Fan points per $1 tipped</label><input id="pp" type="number" min="0" step="any"></div><div><label for="dh">Discord webhook URL</label><input id="dh" type="password" autocomplete="off" placeholder="https://discord.com/api/webhooks/..."></div></div>
-    <label for="rd">Redeems, one per line: name | cost | alert, scare or spin</label><textarea id="rd" rows="4"></textarea>
-    <label for="ws">Wheel slices, separated by commas</label><input id="ws">
-    <label for="qr">Your KHQR image</label><input id="qr" type="file" accept="image/*"><img id="qp" alt="" hidden>
-    <button onclick="saveSettings()">Save settings</button> <span id="se" class="mut"></span>
-    <p class="mut" id="sv"></p></section>
+    <!-- CARDS -->
+    <div class="panel" data-panel="cards" hidden>
+      <section class="card"><h2>Collectible cards</h2>
+        <p class="mut">Named tippers pull a random card for each tip. Bigger tips improve the odds of rare cards. Viewers keep a collection (unlocked with their passcode) and can battle your boss on the tip page.</p>
+        <div class="deck" id="deck"></div>
+        <label for="cdl">Your cards, one per line: name | rarity (common, rare, epic, legendary) | emoji | color | image URL (optional, https)</label>
+        <textarea id="cdl" rows="9"></textarea>
+        <p class="mut">Use at least 3 cards. Clear the box and save to go back to the starter set. Only upload art you own or have the right to use.</p>
+        <div class="grid">
+          <div><label for="cm">Tip needed per pull (USD, 0 = off)</label><input id="cm" type="number" min="0" step="any"></div>
+          <div><label for="bp">Boss power (battle difficulty)</label><input id="bp" type="number" min="0"></div>
+          <div><label for="bc">Battle entry cost (points)</label><input id="bc" type="number" min="0"></div>
+          <div><label for="br">Battle win reward (points)</label><input id="br" type="number" min="0"></div>
+        </div>
+        <button onclick="saveCards()">Save cards</button><button class="alt" onclick="act('test-card')">Test card pull on stream</button> <span id="cs" class="mut"></span>
+      </section>
+    </div>
 
-  <section><h2>Connect your bank notifications</h2><button class="alt" onclick="backup()" style="float:right">Download backup</button>
-    <p class="mut">Each time your bank sends a payment notification, send its text to this address. See the README for phone setup.</p>
-    <div class="link"><code id="nh"></code><button class="alt" onclick="copy('nh')">Copy</button></div></section>
-  <section><h2>Recent tips</h2><ul id="tips"></ul></section>
+    <!-- WEBSITE -->
+    <div class="panel" data-panel="website" hidden>
+      <section class="card"><h2>Official creator website</h2>
+        <p class="mut">Build a public home for your brand, links and content. Anyone can view this page, so only publish details and links you want public.</p>
+        <div class="grid">
+          <div><label for="siteTitle">Website display name</label><input id="siteTitle" maxlength="60" placeholder="Your creator name"></div>
+          <div><label for="siteTagline">Headline / tagline</label><input id="siteTagline" maxlength="140" placeholder="Creator · Gamer · Tech"></div>
+          <div><label for="siteLocation">Location / region</label><input id="siteLocation" maxlength="80" placeholder="Cambodia"></div>
+          <div><label for="siteTheme">Accent color (hex)</label><input id="siteTheme" maxlength="7" placeholder="#f05b78"></div>
+          <div><label for="siteAvatar">Profile image URL</label><input id="siteAvatar" type="url" placeholder="https://..."></div>
+          <div><label for="siteCover">Banner image URL</label><input id="siteCover" type="url" placeholder="https://..."></div>
+          <div><label for="siteEmail">Public business email</label><input id="siteEmail" type="email" placeholder="you@example.com"></div>
+          <div><label for="siteTelegram">Telegram contact link</label><input id="siteTelegram" type="url" placeholder="https://t.me/yourname"></div>
+          <div><label for="siteSchedule">Streaming schedule</label><input id="siteSchedule" maxlength="240" placeholder="Mon–Fri · 8 PM Cambodia time"></div>
+          <div><label for="siteLiveUrl">Live stream URL</label><input id="siteLiveUrl" type="url" placeholder="https://youtube.com/..."></div>
+        </div>
+        <label for="siteQuote">Signature quote / creator motto</label><input id="siteQuote" maxlength="180" placeholder="Turning passion into impact.">
+        <label for="siteMetrics">Audience metrics — one per line: platform | count (max 4)</label><textarea id="siteMetrics" placeholder="Facebook | 900K+&#10;YouTube | 549K+&#10;TikTok | 280K+"></textarea>
+        <label for="roomWelcome">Live Lounge welcome message</label><input id="roomWelcome" maxlength="160" placeholder="Be kind, have fun and hype up the creator!">
+        <label class="check"><input id="chatEnabled" type="checkbox" checked> Enable public audience chat</label>
+        <label for="slowMode">Chat slow mode (seconds between messages per visitor)</label><input id="slowMode" type="number" min="0" max="30" value="0">
+        <label for="siteBio">About / creator introduction</label><textarea id="siteBio" rows="4" maxlength="1800" placeholder="Tell your audience who you are, what you create and why it matters."></textarea>
+        <label class="check"><input id="siteLive" type="checkbox"> I am live now (manual status)</label>
+        <p class="mut">The LIVE badge is manual. Set your stream URL above; automatic platform live detection is not enabled yet.</p>
+        <label for="siteSocials">Social channels — one per line: platform | URL</label><textarea id="siteSocials" placeholder="YouTube | https://youtube.com/@yourname&#10;TikTok | https://tiktok.com/@yourname"></textarea>
+        <label for="siteVideos">Featured videos / projects — one per line: title | description | URL</label><textarea id="siteVideos" placeholder="Latest stream | Watch the latest episode | https://youtu.be/..."></textarea>
+        <label for="siteArticles">Articles / updates — one per line: title | excerpt | URL</label><textarea id="siteArticles" placeholder="Staying safe online | A quick guide for the community | https://..."></textarea>
+        <label for="siteCommunities">Community links — one per line: name | description | URL</label><textarea id="siteCommunities" placeholder="Discord | Join the community | https://discord.gg/..."></textarea>
+        <label for="sitePartners">Partners — one per line: name | URL</label><textarea id="sitePartners" placeholder="Partner brand | https://example.com"></textarea>
+        <button onclick="saveProfile()">Save public website</button> <span class="mut" id="profileStatus"></span>
+        <div class="link" style="margin-top:14px"><code id="creatorUrl"></code><button class="alt" onclick="copy('creatorUrl')">Copy website link</button></div>
+        <p class="mut"><a id="previewCreator" href="#" target="_blank" rel="noopener">Preview your public creator website ↗</a></p>
+        <div class="link"><code id="liveRoomUrl"></code><button class="alt" onclick="copy('liveRoomUrl')">Copy Live Lounge link</button></div>
+        <p class="mut"><a id="previewLiveRoom" href="#" target="_blank" rel="noopener">Open your audience Live Lounge ↗</a></p>
+      </section>
+    </div>
+
+    <!-- SETTINGS -->
+    <div class="panel" data-panel="settings" hidden>
+      <section class="card"><h2>Stream settings</h2>
+        <div class="grid"><div><label for="dn">Display name</label><input id="dn" maxlength="30"></div><div></div>
+        <div><label for="gt">Goal title</label><input id="gt" maxlength="40"></div><div><label for="gg">Goal amount (USD)</label><input id="gg" type="number" min="1"></div>
+        <div><label for="sm">Spin the wheel at (USD, 0 = off)</label><input id="sm" type="number" min="0"></div><div><label for="ss">Jumpscare at (USD, 0 = off)</label><input id="ss" type="number" min="0"></div>
+        <div><label for="tp">Timer minutes added per $1</label><input id="tp" type="number" min="0" step="any"></div><div><label for="mm">Media share from (USD)</label><input id="mm" type="number" min="0" step="any"></div>
+        <div><label for="tc">Telegram chat ID</label><input id="tc"></div><div><label for="yv">YouTube live video ID</label><input id="yv" maxlength="11"></div>
+        <div><label for="pp">Fan points per $1 tipped</label><input id="pp" type="number" min="0" step="any"></div><div><label for="dh">Discord webhook URL</label><input id="dh" type="password" autocomplete="off" placeholder="https://discord.com/api/webhooks/..."></div></div>
+        <label for="rd">Redeems, one per line: name | cost | alert, scare or spin</label><textarea id="rd" rows="4"></textarea>
+        <label for="ws">Wheel slices, separated by commas</label><input id="ws">
+        <label for="qr">Your KHQR image</label><input id="qr" type="file" accept="image/*"><img class="img-prev" id="qp" alt="" hidden>
+        <button onclick="saveSettings()">Save settings</button> <span id="se" class="mut"></span>
+        <p class="mut" id="sv"></p></section>
+      <section class="card"><h2>Backup</h2><p class="mut">Download a copy of your data now and then.</p><button class="alt" onclick="backup()">Download backup</button></section>
+    </div>
+  </div>
 </div>
 
 <script>
 const $ = id => document.getElementById(id);
-let S = localStorage.getItem('session'), me, qr;
+let S = localStorage.getItem('session'), me, qr, feedStarted = false;
 const api = (path, body) => fetch(path, { method: body ? 'POST' : 'GET', headers: { Authorization: 'Bearer ' + S, ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body && JSON.stringify(body) }).then(r => r.json());
-const money = t => t.currency === 'KHR' ? '៛' + t.amount.toLocaleString() : '$' + t.amount;
+const money = t => t.currency === 'KHR' ? '៛' + Number(t.amount).toLocaleString() : '$' + t.amount;
 const copy = id => navigator.clipboard.writeText($(id).textContent);
 const linesFor = (items, keys) => (items || []).map(item => keys.map(key => item[key] || '').join(' | ')).join('\n');
 const post = (path, body) => fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json());
+
+// Tabs
+document.querySelectorAll('.tab[data-tab]').forEach(b => b.onclick = () => showTab(b.dataset.tab));
+function showTab(name) {
+  document.querySelectorAll('.tab[data-tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
+  document.querySelectorAll('.panel').forEach(p => p.hidden = p.dataset.panel !== name);
+  try { sessionStorage.setItem('tab', name); } catch {}
+}
+function logout() { localStorage.removeItem('session'); location.reload(); }
 
 async function auth(kind) {
   const d = await post('/api/' + kind, { slug: $('u').value, password: $('p').value });
@@ -127,13 +190,32 @@ async function reset() {
   if (d.error) { $('ae').textContent = d.error; return; }
   S = d.session; localStorage.setItem('session', S); load();
 }
+
+function renderDeck(cards, el, owned) {
+  el.textContent = '';
+  cards.forEach(c => {
+    const d = document.createElement('div'); d.className = 'gc ' + c.rarity; d.style.setProperty('--c', c.color && c.rarity === 'common' ? c.color : '');
+    if (c.color) d.style.setProperty('--c', c.color);
+    const art = document.createElement('div'); art.className = 'art';
+    if (c.art) { const i = document.createElement('img'); i.src = c.art; i.alt = c.name; i.referrerPolicy = 'no-referrer'; art.appendChild(i); } else art.textContent = c.emoji;
+    const n = document.createElement('b'); n.textContent = c.name; const r = document.createElement('small'); r.textContent = c.rarity;
+    d.append(art, n, r); el.appendChild(d);
+  });
+}
+
 async function load() {
   if (!S) return;
   me = await api('/api/me');
   if (me.error) { localStorage.removeItem('session'); S = null; return; }
   $('auth').hidden = true; $('dash').hidden = false;
+  try { showTab(sessionStorage.getItem('tab') || 'live'); } catch { showTab('live'); }
+  $('title').textContent = me.name; $('sub').textContent = location.origin + '/pay/' + me.slug;
+  const st = me.stats || {};
+  $('stRaised').textContent = '$' + (st.raised || 0); const pctv = st.goal ? Math.min(100, Math.round((st.raised || 0) / st.goal.target * 100)) : 0;
+  $('stGoal').textContent = pctv + '%'; $('stGoalT').textContent = st.goal ? st.goal.title + ' ($' + st.goal.target + ')' : 'Goal';
+  $('stTop').textContent = st.top && st.top[0] ? st.top[0].name : '–'; $('stFans').textContent = me.players || 0;
   const o = location.origin, t = me.alertToken, ov = w => o + '/overlay?w=' + w + '&token=' + t;
-  const L = [['Tip page (share with viewers)', o + '/pay/' + me.slug], ['Official creator website', o + '/creator/' + me.slug], ['Audience Live Lounge', o + '/live/' + me.slug], ['Alerts overlay', ov('alerts')], ['Spin and raffle wheel overlay', ov('wheel')], ['Goal bar overlay', ov('goal')], ['Top donors overlay', ov('top')], ['Subathon timer overlay', ov('timer')], ['Poll overlay', ov('poll')], ['Prediction overlay', ov('predict')], ['YouTube chat overlay', ov('chat')]];
+  const L = [['Tip page (share with viewers)', o + '/pay/' + me.slug], ['Official creator website', o + '/creator/' + me.slug], ['Audience Live Lounge', o + '/live/' + me.slug], ['Alerts overlay (alerts, card pulls, battles)', ov('alerts')], ['Spin and raffle wheel overlay', ov('wheel')], ['Goal bar overlay', ov('goal')], ['Top donors overlay', ov('top')], ['Subathon timer overlay', ov('timer')], ['Poll overlay', ov('poll')], ['Prediction overlay', ov('predict')], ['YouTube chat overlay', ov('chat')]];
   $('links').textContent = '';
   L.forEach(([name, url], i) => {
     const d = document.createElement('div'); d.innerHTML = '<div class="mut"></div><div class="link"><code id="l' + i + '"></code><button class="alt">Copy</button></div>';
@@ -157,7 +239,7 @@ async function load() {
   $('chatEnabled').checked = profile.chatEnabled !== false;
   $('slowMode').value = profile.slowMode || 0;
   $('siteQuote').value = profile.quote || '';
-  $('siteMetrics').value = (profile.metrics || []).map(item => item.label + ' | ' + item.value).join('\\n');
+  $('siteMetrics').value = (profile.metrics || []).map(item => item.label + ' | ' + item.value).join('\n');
   $('siteLive').checked = !!profile.isLive;
   $('siteSocials').value = linesFor(profile.socials, ['title', 'url']);
   $('siteVideos').value = linesFor(profile.videos, ['title', 'description', 'url']);
@@ -171,13 +253,48 @@ async function load() {
   renderRoomModeration(me.roomMessages || []);
   const c = me.cfg; $('dn').value = me.name; $('gt').value = me.goal.title; $('gg').value = me.goal.target;
   $('sm').value = c.spinMin; $('ss').value = c.scareMin; $('tp').value = c.timerPerUsd; $('mm').value = c.mediaMin; $('tc').value = c.tgChat; $('yv').value = c.ytVideo; $('ws').value = me.wheel.join(', '); $('pp').value = c.pointsPerUsd; $('dh').value = c.discordHook || ''; $('rd').value = me.redeems.map(r => r.title + ' | ' + r.cost + ' | ' + r.kind).join('\n');
+  $('cm').value = c.cardMin; $('bp').value = c.bossPower; $('bc').value = c.battleCost; $('br').value = c.battleReward;
+  $('cdl').value = (me.cards || []).map(x => [x.name, x.rarity, x.emoji, x.color, x.art || ''].join(' | ')).join('\n');
+  renderDeck(me.cards || [], $('deck'));
   $('rn').textContent = me.raffle + ' entries';
   $('sv').textContent = 'Server features: Telegram ' + (me.tgReady ? 'ready' : 'not set up') + ', YouTube chat ' + (me.ytReady ? 'ready' : 'not set up') + '.';
   if (me.khqr) { $('qp').src = me.khqr; $('qp').hidden = false; }
-  $('tips').textContent = '';
-  me.tips.forEach(t => { const li = document.createElement('li'); li.textContent = t.name + ' · ' + money(t) + (t.message ? ' · ' + t.message : ''); $('tips').appendChild(li); });
-  if (!me.tips.length) $('tips').textContent = 'No tips yet. Send a test alert to try your overlay.';
+  if (!feedStarted) { feedStarted = true; (me.tips || []).slice().reverse().forEach(tp => addFeed({ type: 'tip', ...tp }, true)); startFeed(); }
 }
+
+// Live donation feed: polls the same event endpoint the overlays use.
+const FEED_ICON = { tip: '💸', redeem: '🎁', pull: '🃏', battle: '⚔️' };
+function addFeed(d, quiet) {
+  if (!FEED_ICON[d.type]) return;
+  let title = '', sub = '', amt = '';
+  if (d.type === 'tip') { title = d.name; sub = d.message || ''; amt = money(d); }
+  else if (d.type === 'redeem') { title = d.name + ' redeemed ' + d.title; sub = d.message || ''; }
+  else if (d.type === 'pull') { title = d.name + ' pulled a card'; sub = (d.cards || []).map(x => x.emoji + ' ' + x.name + ' (' + x.rarity + ')').join(', '); }
+  else if (d.type === 'battle') { title = d.name + (d.won ? ' won a battle' : ' lost a battle'); sub = d.card.name + ' ' + d.mine + ' vs boss ' + d.boss; amt = d.won ? '+' + d.reward + ' pts' : ''; }
+  const row = document.createElement('div'); row.className = 'it';
+  const em = document.createElement('div'); em.className = 'em'; em.textContent = FEED_ICON[d.type];
+  const tx = document.createElement('div'); tx.className = 'tx'; const b = document.createElement('b'); b.textContent = title + (d.test ? ' (test)' : ''); const sp = document.createElement('span'); sp.textContent = sub; tx.append(b, sp);
+  const a = document.createElement('div'); a.className = 'amt'; a.textContent = amt;
+  row.append(em, tx, a); $('feedEmpty').hidden = true;
+  $('feed').prepend(row); while ($('feed').children.length > 60) $('feed').lastChild.remove();
+}
+let feedCursor = null, feedDelay = 2000;
+async function pollFeed() {
+  try {
+    const r = await fetch('/events/' + encodeURIComponent(me.alertToken) + (feedCursor === null ? '' : '?since=' + feedCursor), { cache: 'no-store' });
+    const j = await r.json(); $('conn').classList.remove('off'); $('connt').textContent = 'Live';
+    if (feedCursor !== null) { (j.events || []).forEach(e => addFeed(e.data)); if ((j.events || []).some(e => e.data.type === 'tip' || e.data.type === 'battle')) refreshStats(j.stats); }
+    feedCursor = Number(j.cursor || 0); feedDelay = 2000;
+  } catch { $('conn').classList.add('off'); $('connt').textContent = 'Reconnecting…'; feedDelay = Math.min(15000, feedDelay * 1.6); }
+  setTimeout(pollFeed, feedDelay);
+}
+function startFeed() { pollFeed(); }
+function refreshStats(st) {
+  if (!st) return;
+  $('stRaised').textContent = '$' + st.raised; $('stGoal').textContent = Math.min(100, Math.round(st.raised / st.goal.target * 100)) + '%';
+  $('stTop').textContent = st.top && st.top[0] ? st.top[0].name : '–';
+}
+
 $('qr').onchange = e => { const f = e.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => { qr = r.result; $('qp').src = qr; $('qp').hidden = false; }; r.readAsDataURL(f); };
 async function saveSettings() {
   const n = id => +$(id).value;
@@ -186,6 +303,13 @@ async function saveSettings() {
     redeems: $('rd').value.split('\n').map(l => l.split('|').map(s => s.trim())).filter(a => a[0]).map(a => ({ title: a[0], cost: a[1], kind: a[2] })) };
   if (qr) b.khqr = qr;
   const d = await api('/api/settings', b); $('se').textContent = d.ok ? 'Saved.' : 'Could not save. The QR image may be too large.'; load();
+}
+async function saveCards() {
+  const n = id => +$(id).value;
+  const cards = $('cdl').value.split(/\r?\n/).map(l => l.split('|').map(s => s.trim())).filter(a => a[0]).map(a => ({ name: a[0], rarity: (a[1] || 'common').toLowerCase(), emoji: a[2] || '🃏', color: a[3] || '', art: a[4] || '' }));
+  if (cards.length && cards.length < 3) { $('cs').className = 'err'; $('cs').textContent = 'Add at least 3 cards, or clear the box to use the starter set.'; return; }
+  const d = await api('/api/settings', { cards, cfg: { cardMin: n('cm'), bossPower: n('bp'), battleCost: n('bc'), battleReward: n('br') } });
+  $('cs').className = d.ok ? 'ok' : 'err'; $('cs').textContent = d.ok ? 'Saved.' : (d.error || 'Could not save.'); if (d.ok) load();
 }
 
 function parseProfileRows(id, keys) {
@@ -219,8 +343,8 @@ function renderRoomModeration(items) {
   const box = $('roomModeration'); box.textContent = '';
   (items || []).forEach(item => {
     const row = document.createElement('div'); row.className = 'link';
-    const label = document.createElement('span'); label.textContent = item.name + ': ' + item.message;
-    const button = document.createElement('button'); button.className = 'alt'; button.textContent = 'Delete';
+    const label = document.createElement('span'); label.style.flex = '1'; label.textContent = item.name + ': ' + item.message;
+    const button = document.createElement('button'); button.className = 'alt sm'; button.textContent = 'Delete';
     button.onclick = () => moderateChat('delete', item.id);
     row.append(label, button); box.append(row);
   });
@@ -239,8 +363,8 @@ async function pred(a) { const body = a === 'new' ? { q: $('dq').value, options:
 async function announce() { const d = await api('/api/announce', { origin: location.origin }); $('lm').textContent = d.error || 'Sent.'; }
 async function backup() {
   const r = await fetch('/api/backup', { headers: { Authorization: 'Bearer ' + S } });
-  const a = document.createElement('a'); a.href = URL.createObjectURL(await r.blob()); a.download = 'livetip-backup.json'; a.click();
+  const a = document.createElement('a'); a.href = URL.createObjectURL(await r.blob()); a.download = 'botstream-backup.json'; a.click();
 }
 fetch('/api/config').then(r => r.json()).then(c => { if (c.single) { $('regbtn').hidden = $('forgot').hidden = true; $('ah').textContent = 'Log in'; } });
 load();
-</script></main></body></html>
+</script></body></html>
