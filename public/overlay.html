@@ -9,6 +9,14 @@ html,body{margin:0;height:100%;overflow:hidden;background:transparent;font:700 3
 #card.on{transform:translate(-50%,0)}
 #card b{display:block;font-size:34px}#card span{display:block;font-weight:400;font-size:26px;margin-top:6px}
 #crown{font-size:22px;color:#ffd166;margin-bottom:4px}
+#cr{display:flex;gap:14px;justify-content:center;margin-top:12px;flex-wrap:wrap}
+.gc{--c:#9aa4c7;width:150px;border-radius:16px;padding:12px 8px;background:linear-gradient(160deg,#1e1b3a,#0b0a1a);border:3px solid var(--c);text-shadow:none;animation:flip .7s cubic-bezier(.2,1.2,.4,1) both;font-weight:700}
+.gc.rare{--c:#38bdf8}.gc.epic{--c:#a78bfa}.gc.legendary{--c:#ffb84d;box-shadow:0 0 40px #ffb84d99;animation:flip .7s cubic-bezier(.2,1.2,.4,1) both,glow 1.2s ease-in-out infinite alternate}
+.gc .art{font-size:64px;line-height:1.2}.gc .art img{max-width:100%;max-height:80px;border-radius:10px}
+.gc b{font-size:20px!important;margin-top:4px}.gc small{display:block;color:var(--c);text-transform:uppercase;font-size:14px;letter-spacing:.1em}
+@keyframes flip{from{transform:rotateY(90deg) scale(.6);opacity:0}to{transform:none;opacity:1}}
+@keyframes glow{from{box-shadow:0 0 20px #ffb84d66}to{box-shadow:0 0 60px #ffb84dcc}}
+.vs{display:flex;align-items:center;justify-content:center;font-size:40px}
 #vid{width:100%;aspect-ratio:16/9;border:0;border-radius:12px;margin-top:12px}
 #scare{position:fixed;inset:0;display:grid;place-items:center;background:#b00020;font-size:120px;text-align:center;opacity:0;pointer-events:none}
 #scare.on{animation:sc .9s steps(2) 1}@keyframes sc{0%,100%{opacity:0}10%,60%{opacity:1}}
@@ -21,7 +29,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:transparent;font:700 3
 #chat{top:20px;bottom:auto;font-weight:400;font-size:24px}#chat div{background:#0009;border-radius:10px;padding:4px 12px;margin-top:5px}#chat b{color:#ffd166}
 </style></head>
 <body>
-<div id="card"><div id="crown" hidden>New top donor!</div><b id="t"></b><span id="m"></span><iframe id="vid" hidden allow="autoplay"></iframe></div>
+<div id="card"><div id="crown" hidden>New top donor!</div><b id="t"></b><span id="m"></span><div id="cr"></div><iframe id="vid" hidden allow="autoplay"></iframe></div>
 <div id="scare"></div>
 <div id="goal" hidden><div id="gt"></div><div class="track"><div class="fill" id="gf"></div></div></div>
 <div id="top" hidden></div><div id="poll" hidden></div><div id="pred" hidden></div><div id="timer" hidden></div><div id="chat" hidden></div>
@@ -38,9 +46,32 @@ function speak(text) {
   if ('speechSynthesis' in window) { const s = new SpeechSynthesisUtterance(text); s.lang = 'km-KH'; speechSynthesis.speak(s); }
 }
 function hideCard() { clearTimeout(hideT); $('card').classList.remove('on'); $('vid').hidden = true; $('vid').src = ''; if (audio) audio.pause(); if ('speechSynthesis' in window) speechSynthesis.cancel(); setTimeout(() => { busy = false; next(); }, 700); }
+function cardEl(c) {
+  const d = document.createElement('div'); d.className = 'gc ' + c.rarity; if (c.color) d.style.setProperty('--c', c.color);
+  const a = document.createElement('div'); a.className = 'art';
+  if (c.art) { const i = document.createElement('img'); i.src = c.art; i.alt = ''; i.referrerPolicy = 'no-referrer'; a.appendChild(i); } else a.textContent = c.emoji;
+  const n = document.createElement('b'); n.textContent = c.name; const r = document.createElement('small'); r.textContent = c.rarity;
+  d.append(a, n, r); return d;
+}
+function showSpecial(d) {
+  const row = $('cr'); row.textContent = ''; $('crown').hidden = true;
+  if (d.type === 'pull') {
+    $('t').textContent = d.name + ' pulled a card!'; $('m').textContent = d.cards.map(c => c.name).join(', ');
+    d.cards.forEach(c => row.appendChild(cardEl(c)));
+    speak(d.name + ' pulled ' + d.cards.map(c => c.name + ', ' + c.rarity).join('. '));
+    return d.cards.some(c => c.rarity === 'legendary') ? 11000 : 8000;
+  }
+  $('t').textContent = d.name + (d.won ? ' defeated the boss!' : ' was beaten by the boss');
+  $('m').textContent = d.card.name + ' (' + d.mine + ') vs boss (' + d.boss + ')' + (d.won ? ' · +' + d.reward + ' points' : '');
+  row.appendChild(cardEl(d.card)); const vs = document.createElement('div'); vs.className = 'vs'; vs.textContent = d.won ? '🏆' : '💥'; row.appendChild(vs);
+  speak(d.name + (d.won ? ' won the battle' : ' lost the battle'));
+  return 8000;
+}
 function next() {
   if (busy || !queue.length) return;
   busy = true; const d = queue.shift();
+  if (d.type === 'pull' || d.type === 'battle') { $('card').classList.add('on'); hideT = setTimeout(hideCard, showSpecial(d)); return; }
+  $('cr').textContent = '';
   $('t').textContent = d.redeem ? d.name + ' redeemed ' + d.title : d.name + ' · ' + money(d); $('m').textContent = d.message || '';
   $('crown').hidden = !d.champion;
   if (d.media) { $('vid').src = 'https://www.youtube-nocookie.com/embed/' + d.media + '?autoplay=1'; $('vid').hidden = false; }
@@ -117,6 +148,7 @@ function handleEvent(d) {
   if (d.type === 'tip' && w === 'alerts') { queue.push(d); next(); }
   if (d.type === 'spin' && w === 'wheel') runWheel(d);
   if (d.type === 'redeem' && w === 'alerts') { queue.push({ ...d, redeem: true, scare: d.kind === 'scare' }); next(); }
+  if ((d.type === 'pull' || d.type === 'battle') && w === 'alerts') { queue.push(d); next(); }
   if (d.type === 'skip' && w === 'alerts') { queue = []; if (busy) hideCard(); }
   if (d.type === 'stats') stats(d);
 }

@@ -27,6 +27,12 @@ tell Telegram you are live. Settings set the spin, jumpscare and media-share thr
 - Points only come from tips that matched a pending tip on the tip page, never from unmatched bank texts.
 - Discord: paste a Discord webhook URL in Settings to post each tip and your go-live message there.
 
+## Collectible cards and boss battles
+- Every named tip with a passcode pulls cards (one per `Tip needed per pull` in USD, up to 3). Bigger tips improve the odds of rare, epic and legendary cards.
+- The Cards tab in the dashboard sets your own cards, one per line: `name | rarity | emoji | color | image URL`. Image URLs must be https, and you should only use art you own or have the right to use. Starter cards use emoji, so nothing is needed to begin.
+- Viewers open their collection on the tip page with their name and passcode and can battle your boss. A battle costs points, a win pays points, and the arena has a 12 second cooldown. Pulls and battles show on the Alerts overlay.
+- The dashboard Live tab shows a real-time feed of tips, redeems, pulls and battles, with a skip button for the current alert.
+
 ## How a tip flows
 1. Viewer fills the tip page (name, amount, message, optional YouTube link), then sees your KHQR.
 2. Viewer pays. Your bank sends you a payment notification.
@@ -57,6 +63,5 @@ YouTube video check before payment, Telegram and Discord messages, Google voice,
 
 ## Not built
 - Telegram sign-in by QR (needs a Telegram user-account library; bots cannot read other bots' messages)
-- Card pulls and battles (these need card art and game rules)
 - Automatic go-live detection (use the Telegram button in the dashboard)
 - Email, payments beyond the bank text, a billing system

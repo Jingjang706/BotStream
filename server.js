@@ -129,7 +129,32 @@ const send = (u, ev) => {
   }
 };
 const usd = t => t.currency === 'KHR' ? t.amount / KHR_RATE : t.amount;
-const DEF = { spinMin: 10, timerPerUsd: 1, scareMin: 20, mediaMin: 2, pointsPerUsd: 10, tgChat: '', ytVideo: '', discordHook: '' };
+const DEF = { spinMin: 10, timerPerUsd: 1, scareMin: 20, mediaMin: 2, pointsPerUsd: 10, cardMin: 1, bossPower: 50, battleCost: 10, battleReward: 30, tgChat: '', ytVideo: '', discordHook: '' };
+// Cards: creators define their own set (placeholder emoji art by default). Rarity is rolled on every named, matched tip.
+const RARITIES = ['common', 'rare', 'epic', 'legendary'], BASE_POWER = { common: 10, rare: 25, epic: 50, legendary: 90 };
+const DEFCARDS = [
+  ['Sprout Pup', 'common', '🐶', '#3dd6c8'], ['Moss Frog', 'common', '🐸', '#4caf50'], ['Cloud Cat', 'common', '🐱', '#90caf9'], ['Ember Fox', 'common', '🦊', '#ff9f43'],
+  ['Tide Turtle', 'rare', '🐢', '#0f9d92'], ['Thunder Owl', 'rare', '🦉', '#ffd166'], ['Frost Wolf', 'rare', '🐺', '#7bdff2'],
+  ['Shadow Panther', 'epic', '🐆', '#7b6cf6'], ['Blaze Tiger', 'epic', '🐯', '#ff6b35'],
+  ['Sky Dragon', 'legendary', '🐉', '#ff4d6d'], ['Star Phoenix', 'legendary', '🦅', '#ffd700']
+].map(([name, rarity, emoji, color]) => ({ id: name.toLowerCase().replace(/[^a-z0-9]+/g, '-'), name, rarity, emoji, color, art: '' }));
+const cardsOf = u => (Array.isArray(u.cards) && u.cards.length ? u.cards : DEFCARDS);
+const cleanCards = list => {
+  const seen = new Set();
+  return (Array.isArray(list) ? list : []).map(c => {
+    const name = String(c.name || '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, 24), id = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    const art = /^https:\/\/[^\s"'<>]{4,300}$/.test(String(c.art || '')) ? String(c.art) : '';
+    return { id, name, rarity: RARITIES.includes(c.rarity) ? c.rarity : 'common', emoji: Array.from(String(c.emoji || '🃏')).slice(0, 2).join(''), color: /^#[0-9a-fA-F]{6}$/.test(String(c.color || '')) ? c.color : '#7b6cf6', art };
+  }).filter(c => c.id && !seen.has(c.id) && seen.add(c.id)).slice(0, 40);
+};
+const pubCard = c => ({ id: c.id, name: c.name, rarity: c.rarity, emoji: c.emoji, color: c.color, art: c.art });
+function rollCard(u, usdValue) {
+  const luck = Math.min(4, 1 + usdValue / 20), w = { common: 70, rare: 22 * luck, epic: 7 * luck * luck, legendary: 1 * luck * luck * luck };
+  const pool = cardsOf(u), total = pool.reduce((s, c) => s + w[c.rarity], 0);
+  let r = Math.random() * total;
+  for (const c of pool) { r -= w[c.rarity]; if (r <= 0) return c; }
+  return pool[pool.length - 1];
+}
 
 const profileText = (value, max) => String(value == null ? '' : value).replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, max);
 const safeProfileUrl = value => {
@@ -283,13 +308,22 @@ function handleNote(u, text) {
   if (before && after === tip.name && before !== after) tip.champion = true;
   if (u.timer > now && c.timerPerUsd > 0) u.timer += Math.round(c.timerPerUsd * v * 60000);
   u.raffle = u.raffle || []; if (!u.raffle.includes(tip.name)) u.raffle.push(tip.name);
+  let pullEvent = null;
   if (p && c.pointsPerUsd > 0 && tip.name !== 'Anonymous') {
     const a = pts(u)[pkey(tip.name)] = pts(u)[pkey(tip.name)] || { name: tip.name, p: 0 };
     a.p += Math.floor(v * c.pointsPerUsd); if (!a.pass && p.pass) a.pass = p.pass;
     tip.points = a.p;
+    if (c.cardMin > 0 && v >= c.cardMin) {
+      const n = Math.min(3, Math.floor(v / c.cardMin)), got = [];
+      a.cards = a.cards || {};
+      for (let i = 0; i < n; i++) { const card = rollCard(u, v); a.cards[card.id] = (a.cards[card.id] || 0) + 1; got.push(pubCard(card)); }
+      tip.pulled = got.length;
+      pullEvent = { type: 'pull', name: tip.name, cards: got };
+    }
   }
   save();
   send(u, { type: 'tip', ...tip });
+  if (pullEvent) send(u, pullEvent);
   if (c.spinMin > 0 && v >= c.spinMin) spin(u, tip.name + ' spins the wheel');
   send(u, stats(u));
   dc(c.discordHook, tip.name + ' tipped ' + (tip.currency === 'KHR' ? '៛' + tip.amount : '$' + tip.amount) + (tip.message ? ': ' + tip.message : ''));
@@ -365,6 +399,7 @@ async function app(req, res) {
     if (SINGLE && !E.LANDING) { res.writeHead(302, { Location: '/pay/' + OWNER }); return res.end(); }
     return page(res, 'index.html');
   }
+  if (p === '/assets/botstream.css') { try { res.writeHead(200, { 'Content-Type': 'text/css;charset=utf-8', 'Cache-Control': 'public, max-age=300' }); return res.end(fs.readFileSync(path.join(__dirname, 'public', 'assets', 'botstream.css'))); } catch { res.writeHead(404); return res.end(); } }
   if (p === '/app') return page(res, 'app.html');
   if (p.startsWith('/creator/')) return page(res, 'creator.html');
   if (p.startsWith('/live/')) return page(res, 'live.html');
@@ -442,7 +477,7 @@ async function app(req, res) {
   }
   if (p.startsWith('/api/public/')) {
     const u = db.users[p.slice(12)];
-    return u ? json(res, { name: u.name, khqr: u.khqr, profile: cleanProfile(u.profile), poll: pubPoll(u), pred: pubPred(u), mediaMin: cfg(u).mediaMin, pointsPerUsd: cfg(u).pointsPerUsd, redeems: u.redeems || DEFREDEEMS }) : json(res, { error: 'Not found' }, 404);
+    return u ? json(res, { name: u.name, khqr: u.khqr, profile: cleanProfile(u.profile), poll: pubPoll(u), pred: pubPred(u), mediaMin: cfg(u).mediaMin, pointsPerUsd: cfg(u).pointsPerUsd, cardMin: cfg(u).cardMin, cards: cardsOf(u).map(pubCard), battleCost: cfg(u).battleCost, battleReward: cfg(u).battleReward, redeems: u.redeems || DEFREDEEMS }) : json(res, { error: 'Not found' }, 404);
   }
   if (p.startsWith('/api/pay/') && m === 'POST') {
     if (await limited(req, 'pay', 20)) return json(res, { error: 'Too many tries. Wait a minute.' }, 429);
@@ -472,6 +507,26 @@ async function app(req, res) {
     if (await limited(req, 'points', 30)) return json(res, { error: 'Too many tries.' }, 429);
     const u = db.users[p.slice(12)], a = u && acct(u, b.name, b.passcode);
     return a ? json(res, { points: a.p, name: a.name }) : json(res, { error: 'Wrong name or passcode. Your passcode is set with your first paid tip.' }, 401);
+  }
+  if (p.startsWith('/api/cards/') && m === 'POST') {
+    if (await limited(req, 'cards', 30)) return json(res, { error: 'Too many tries.' }, 429);
+    const u = db.users[p.slice(11)], a = u && acct(u, b.name, b.passcode);
+    return a ? json(res, { points: a.p, owned: a.cards || {} }) : json(res, { error: 'Wrong name or passcode.' }, 401);
+  }
+  if (p.startsWith('/api/battle/') && m === 'POST') {
+    if (await limited(req, 'battle', 20)) return json(res, { error: 'Too many tries.' }, 429);
+    const u = db.users[p.slice(12)], a = u && acct(u, b.name, b.passcode);
+    if (!a) return json(res, { error: 'Wrong name or passcode.' }, 401);
+    const c = cfg(u), card = cardsOf(u).find(x => x.id === b.cardId);
+    if (!card || !((a.cards || {})[card.id] > 0)) return json(res, { error: 'You do not own that card.' }, 400);
+    if (a.p < c.battleCost) return json(res, { error: 'A battle costs ' + c.battleCost + ' points. You have ' + a.p + '.' }, 400);
+    if (u.battleAt && Date.now() - u.battleAt < 12000) return json(res, { error: 'The arena is busy. Try again in a few seconds.' }, 429);
+    u.battleAt = Date.now(); a.p -= c.battleCost;
+    const mine = BASE_POWER[card.rarity] + crypto.randomInt(0, 41), boss = c.bossPower + crypto.randomInt(0, 41), won = mine > boss;
+    if (won) a.p += c.battleReward;
+    save();
+    send(u, { type: 'battle', name: a.name, card: pubCard(card), mine, boss, won, reward: won ? c.battleReward : 0 });
+    return json(res, { ok: true, won, mine, boss, points: a.p });
   }
   if (p.startsWith('/api/redeem/') && m === 'POST') {
     if (await limited(req, 'redeem', 20)) return json(res, { error: 'Too many tries.' }, 429);
@@ -569,7 +624,7 @@ async function app(req, res) {
 
   const u = authUser(req);
   if (p.startsWith('/api/') && !u) return json(res, { error: 'Please log in.' }, 401);
-  if (p === '/api/backup') { const { pass, salt, rec, ...rest } = u; rest.points = Object.fromEntries(Object.entries(pts(u)).map(([k, a]) => [k, { name: a.name, p: a.p }])); return json(res, rest); }
+  if (p === '/api/backup') { const { pass, salt, rec, ...rest } = u; rest.points = Object.fromEntries(Object.entries(pts(u)).map(([k, a]) => [k, { name: a.name, p: a.p, cards: a.cards || {} }])); return json(res, rest); }
   if (p === '/api/room/moderate' && m === 'POST') {
     u.roomMessages = u.roomMessages || [];
     if (b.action === 'clear') u.roomMessages = [];
@@ -579,7 +634,7 @@ async function app(req, res) {
     publishRoomEvent(u.slug, { type: 'moderation', action: b.action, id: b.id || '' });
     return json(res, { ok: true, messages: u.roomMessages });
   }
-  if (p === '/api/me') return json(res, { slug: u.slug, name: u.name, profile: cleanProfile(u.profile), roomMessages: (u.roomMessages || []).slice(-30).reverse(), khqr: u.khqr, goal: u.goal, cfg: cfg(u), wheel: u.wheel || SLICES, raffle: (u.raffle || []).length, alertToken: u.alertToken, notifyToken: u.notifyToken, tips: u.tips.slice(-15).reverse(), stats: stats(u), redeems: u.redeems || DEFREDEEMS, players: Object.keys(pts(u)).length, tgReady: !!E.TELEGRAM_BOT_TOKEN, ytReady: !!E.YOUTUBE_API_KEY });
+  if (p === '/api/me') return json(res, { slug: u.slug, name: u.name, profile: cleanProfile(u.profile), roomMessages: (u.roomMessages || []).slice(-30).reverse(), khqr: u.khqr, goal: u.goal, cfg: cfg(u), wheel: u.wheel || SLICES, raffle: (u.raffle || []).length, alertToken: u.alertToken, notifyToken: u.notifyToken, tips: u.tips.slice(-15).reverse(), stats: stats(u), redeems: u.redeems || DEFREDEEMS, cards: cardsOf(u).map(pubCard), players: Object.keys(pts(u)).length, tgReady: !!E.TELEGRAM_BOT_TOKEN, ytReady: !!E.YOUTUBE_API_KEY });
   if (p === '/api/settings' && m === 'POST') {
     if (b.profile && typeof b.profile === 'object') u.profile = cleanProfile(b.profile);
     if (b.name) u.name = String(b.name).slice(0, 30);
@@ -587,16 +642,18 @@ async function app(req, res) {
     if (b.goal) u.goal = { title: String(b.goal.title || 'Stream goal').slice(0, 40), target: Math.max(1, +b.goal.target || 50) };
     if (b.cfg) {
       const c = {};
-      for (const k of ['spinMin', 'timerPerUsd', 'scareMin', 'mediaMin', 'pointsPerUsd']) if (b.cfg[k] !== undefined) c[k] = Math.max(0, +b.cfg[k] || 0);
+      for (const k of ['spinMin', 'timerPerUsd', 'scareMin', 'mediaMin', 'pointsPerUsd', 'cardMin', 'bossPower', 'battleCost', 'battleReward']) if (b.cfg[k] !== undefined) c[k] = Math.max(0, +b.cfg[k] || 0);
       for (const k of ['tgChat', 'ytVideo']) if (typeof b.cfg[k] === 'string') c[k] = b.cfg[k].trim().slice(0, 60);
       if (typeof b.cfg.discordHook === 'string') { const h = b.cfg.discordHook.trim().slice(0, 200); c.discordHook = !h || /^https:\/\/(discord|discordapp)\.com\/api\/webhooks\//.test(h) ? h : u.cfg.discordHook || ''; }
       u.cfg = { ...u.cfg, ...c };
     }
     if (Array.isArray(b.redeems)) u.redeems = b.redeems.map(r => ({ title: String(r.title || '').trim().slice(0, 30), cost: Math.max(1, Math.floor(+r.cost) || 0), kind: KINDS.includes(r.kind) ? r.kind : 'alert' })).filter(r => r.title && r.cost).slice(0, 8).map((r, i) => ({ id: 'r' + (i + 1), ...r }));
+    if (Array.isArray(b.cards)) { const cc = cleanCards(b.cards); if (cc.length >= 3) u.cards = cc; else if (!b.cards.length) u.cards = null; }
     if (Array.isArray(b.wheel)) { const w = b.wheel.map(s => String(s).trim().slice(0, 24)).filter(Boolean).slice(0, 12); if (w.length >= 2) u.wheel = w; }
     save(); send(u, stats(u)); return json(res, { ok: true });
   }
   if (p === '/api/test' && m === 'POST') { send(u, { type: 'tip', test: true, name: 'Sokha', amount: 5, currency: 'USD', message: b.message || 'សូមអរគុណសម្រាប់ការផ្សាយ!' }); return json(res, { ok: true }); }
+  if (p === '/api/test-card' && m === 'POST') { const card = rollCard(u, 25); send(u, { type: 'pull', name: 'Sokha', test: true, cards: [pubCard(card)] }); return json(res, { ok: true }); }
   if (p === '/api/skip' && m === 'POST') { send(u, { type: 'skip' }); return json(res, { ok: true }); }
   if (p === '/api/spin' && m === 'POST') { spin(u, 'Test spin'); return json(res, { ok: true }); }
   if (p === '/api/timer' && m === 'POST') { u.timer = +b.minutes > 0 ? Date.now() + Math.min(+b.minutes, 5000) * 60000 : 0; save(); send(u, stats(u)); return json(res, { ok: true }); }

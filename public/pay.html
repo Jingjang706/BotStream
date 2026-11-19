@@ -1,64 +1,124 @@
 <!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Send a tip</title>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Khmer:wght@400;700&family=Instrument+Sans:wght@400;600&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Khmer:wght@400;700&family=Sora:wght@400;600&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/botstream.css">
 <style>
-:root{--bg:#f3f1fa;--card:#fff;--ink:#1e1b3a;--mut:#5d5a7a;--line:#d9d5ec;--acc:#ff4d6d}
-@media (prefers-color-scheme:dark){:root{--bg:#14122a;--card:#1d1a3a;--ink:#f1eefc;--mut:#a9a5c9;--line:#312d5a}}
-body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.5 "Instrument Sans","Noto Sans Khmer",system-ui,sans-serif;display:grid;place-items:start center;padding:24px 16px}
-main{width:100%;max-width:440px;background:var(--card);border:1px solid var(--line);border-radius:22px;padding:26px}
-h1{font-size:28px;margin:0 0 4px}p{color:var(--mut);margin:4px 0 16px}
-label{display:block;font-weight:600;margin:14px 0 6px}
-input,select,textarea{width:100%;font:inherit;color:inherit;background:transparent;border:1px solid var(--line);border-radius:12px;padding:11px 12px}
-.row{display:flex;gap:10px}.row input{flex:1}.row select{width:96px}
-button{margin-top:20px;width:100%;font-weight:600;font-size:17px;font-family:inherit;background:var(--acc);color:#fff;border:0;border-radius:999px;padding:13px;cursor:pointer}
-img{width:100%;border-radius:14px;margin-top:12px}.err{color:var(--acc);margin-top:10px}#po button{margin:6px 0 0;background:transparent;color:var(--ink);border:2px solid var(--line);text-align:left;padding:10px 16px}
-:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+body{display:grid;place-items:start center;padding:24px 14px 60px}
+main{width:100%;max-width:480px}
+.hero{text-align:center;margin:14px 0 20px}
+.hero .av{width:68px;height:68px;border-radius:50%;background:var(--grad);display:grid;place-items:center;font:700 28px "Space Grotesk",sans-serif;margin:0 auto 10px;box-shadow:0 8px 30px #ff4d8d55}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.chips button{margin:0;padding:7px 14px;font-size:14px}
+.amt{display:flex;gap:10px}.amt input{flex:1}.amt select{width:96px}
+#qr{width:100%;max-width:320px;border-radius:16px;display:block;margin:12px auto;background:#fff;padding:10px}
+.opt{display:block;width:100%;text-align:left;background:var(--bg);color:var(--ink);border:1.5px solid var(--line);box-shadow:none;margin:8px 0 0;border-radius:12px}
+.opt:hover{border-color:var(--a1)}
+.opt:disabled{opacity:.55}
+.seg{display:flex;gap:6px;margin:4px 0 10px;overflow-x:auto}.seg button{margin:0;flex:1;white-space:nowrap}
+.seg button[aria-pressed=false]{background:transparent;color:var(--mut);border:1.5px solid var(--line);box-shadow:none}
+.res{min-height:20px;margin-top:10px}
+footer{text-align:center;margin-top:24px}
 </style></head>
 <body><main>
-<h1 id="h">Send a tip</h1>
-<div id="poll" hidden><h2 id="pq" style="font-size:19px;margin:0 0 8px"></h2><div id="po"></div></div><p>Fill this in, then scan the QR with ABA or any Bakong bank app. Your tip will appear on stream.</p>
+<div class="hero"><div class="av" id="av">✦</div><h1 id="h" class="grad-text">Send a tip</h1><p class="mut">Scan the QR with ABA or any Bakong bank app. Your tip shows up live on stream.</p></div>
+
+<div class="card" id="poll" hidden><h2 id="pq"></h2><div id="po"></div></div>
+
+<div class="card" id="tipcard">
 <form id="f" onsubmit="return go(event)">
-  <label for="n">Your name</label><input id="n" maxlength="30" placeholder="Sokha">
-  <label for="a">Amount</label><div class="row"><input id="a" type="number" min="0.01" step="any" required><select id="c"><option>USD</option><option>KHR</option></select></div>
+  <label for="n" style="margin-top:0">Your name</label><input id="n" maxlength="30" placeholder="Sokha">
+  <label for="a">Amount</label><div class="amt"><input id="a" type="number" min="0.01" step="any" required inputmode="decimal"><select id="c" aria-label="Currency"><option>USD</option><option>KHR</option></select></div>
+  <div class="chips" id="chips"></div>
   <label for="m">Message (read aloud)</label><textarea id="m" rows="3" maxlength="150"></textarea>
   <label for="v">YouTube link to play on stream (optional)</label><input id="v" type="url" placeholder="https://youtu.be/...">
-  <p id="vn" style="font-size:14px;margin:6px 0 0"></p>
-  <label for="pc">Passcode (optional, to spend your fan points later)</label><input id="pc" type="password" maxlength="40" autocomplete="off" placeholder="Pick one you will remember">
-  <button>Show QR to pay</button>
+  <p id="vn" class="mut" style="margin:6px 0 0"></p>
+  <label for="pc">Passcode (to keep your fan points and cards)</label><input id="pc" type="password" maxlength="40" autocomplete="off" placeholder="Pick one you will remember">
+  <button style="width:100%;margin-top:18px;padding:13px">Show QR to pay</button>
 </form>
-<div id="done" hidden><p id="note"></p><img id="qr" alt="KHQR code"><div class="err" id="noqr" hidden>This creator hasn’t added a KHQR code yet.</div></div>
+<div id="done" hidden><p id="note" style="font-weight:600"></p><img id="qr" alt="KHQR code"><div class="err" id="noqr" hidden>This creator hasn’t added a KHQR code yet.</div>
+  <p class="mut">After you pay, your alert plays and you earn fan points and a card pull. Check your collection below.</p></div>
 <div class="err" id="e"></div>
-<section id="fan" hidden style="margin-top:26px;border-top:1px solid var(--line);padding-top:8px">
-  <h2 style="font-size:21px;margin:12px 0 2px">Fan points</h2><p id="fi"></p>
-  <label for="fn">Your name</label><input id="fn" maxlength="30"><label for="fp">Passcode</label><input id="fp" type="password" maxlength="40" autocomplete="off">
-  <button type="button" onclick="bal()">Check my points</button><p id="fb"></p><div id="rl"></div>
-  <div id="pd" hidden><h3 id="pt" style="font-size:18px;margin:16px 0 4px"></h3><div id="pl"></div><label for="pa">Points to bet</label><input id="pa" type="number" min="1" value="10"></div>
+</div>
+
+<section class="card" id="fan" hidden>
+  <h2>Fan zone</h2><p class="mut" id="fi"></p>
+  <label for="fn" style="margin-top:0">Your name</label><input id="fn" maxlength="30"><label for="fp">Passcode</label><input id="fp" type="password" maxlength="40" autocomplete="off">
+  <button type="button" onclick="open_()">Open my fan zone</button>
+  <div class="res" id="fb" aria-live="polite"></div>
+  <div id="zone" hidden>
+    <div class="seg" role="group" aria-label="Fan zone sections">
+      <button type="button" data-s="cards" aria-pressed="true">🃏 Cards</button><button type="button" data-s="redeem" aria-pressed="false">🎁 Redeem</button><button type="button" data-s="predict" aria-pressed="false">🔮 Predict</button>
+    </div>
+    <div data-sec="cards"><p class="mut" id="cinfo"></p><div class="deck" id="deck"></div></div>
+    <div data-sec="redeem" hidden><div id="rl"></div></div>
+    <div data-sec="predict" hidden><div id="pd"><h3 id="pt"></h3><div id="pl"></div><label for="pa">Points to bet</label><input id="pa" type="number" min="1" value="10"></div><p class="mut" id="nopred">No prediction is running right now.</p></div>
+  </div>
 </section>
+<footer class="mut">Powered by BotStream</footer>
 </main>
 <script>
 const slug = location.pathname.split('/')[2], $ = id => document.getElementById(id);
-let info = {};
+let info = {}, owned = {};
 const cred = () => ({ name: $('fn').value.trim(), passcode: $('fp').value });
 const post = (p, b) => fetch(p, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) }).then(r => r.json());
-async function bal() { const d = await post('/api/points/' + slug, cred()); $('fb').textContent = d.error || 'You have ' + d.points + ' points.'; }
-function renderFan() {
-  if (!info.name || !(info.pointsPerUsd > 0)) return;
-  $('fan').hidden = false; $('fi').textContent = 'You earn ' + info.pointsPerUsd + ' points for every $1 you tip. Set a passcode when you tip, then spend your points here.';
-  $('rl').textContent = '';
-  (info.redeems || []).forEach(r => { const b = document.createElement('button'); b.type = 'button'; b.style.cssText = 'background:transparent;color:inherit;border:2px solid var(--line);text-align:left;padding:10px 16px;margin:6px 0 0'; b.textContent = r.title + ' · ' + r.cost + ' points';
-    b.onclick = async () => { const d = await post('/api/redeem/' + slug, { ...cred(), id: r.id }); $('fb').textContent = d.error || 'Done! You have ' + d.points + ' points left.'; }; $('rl').appendChild(b); });
-  const pr = info.pred; $('pd').hidden = !pr; if (!pr) return;
-  $('pt').textContent = 'Prediction: ' + pr.q + (pr.state === 'locked' ? ' (bets locked)' : pr.state === 'done' ? (pr.win >= 0 ? ' (winner: ' + pr.options[pr.win].t + ')' : ' (cancelled)') : '');
-  $('pl').textContent = '';
-  pr.options.forEach((o, i) => { const b = document.createElement('button'); b.type = 'button'; b.disabled = pr.state !== 'open'; b.style.cssText = 'background:transparent;color:inherit;border:2px solid var(--line);text-align:left;padding:10px 16px;margin:6px 0 0'; b.textContent = o.t + ' · ' + o.pool + ' points bet';
-    b.onclick = async () => { const d = await post('/api/bet/' + slug, { ...cred(), i, amount: +$('pa').value }); $('fb').textContent = d.error || 'Bet placed. You have ' + d.points + ' points left.'; if (d.ok) refresh(); }; $('pl').appendChild(b); });
+const say = (t, ok) => { $('fb').className = 'res ' + (ok ? 'ok' : 'err'); $('fb').textContent = t; };
+
+document.querySelectorAll('.seg button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('.seg button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  document.querySelectorAll('[data-sec]').forEach(s => s.hidden = s.dataset.sec !== b.dataset.s);
+});
+function chips() {
+  const cur = $('c').value, list = cur === 'KHR' ? [4000, 10000, 20000, 40000] : [1, 2, 5, 10]; $('chips').textContent = '';
+  list.forEach(v => { const b = document.createElement('button'); b.type = 'button'; b.className = 'alt'; b.textContent = (cur === 'KHR' ? '៛' : '$') + v.toLocaleString(); b.onclick = () => $('a').value = v; $('chips').appendChild(b); });
 }
-function refresh() { fetch('/api/public/' + slug).then(r => r.json()).then(d => { info = d; renderFan(); }); }
+$('c').onchange = chips; chips();
+
+async function open_() {
+  const d = await post('/api/cards/' + slug, cred());
+  if (d.error) { say(d.error + ' Your passcode is set with your first paid tip.', false); $('zone').hidden = true; return; }
+  owned = d.owned || {}; say('You have ' + d.points + ' points.', true); $('zone').hidden = false; renderFan(d.points);
+}
+function renderFan(points) {
+  $('fi').textContent = 'You earn ' + info.pointsPerUsd + ' points for every $1 you tip' + (info.cardMin > 0 ? ' and a card pull for every $' + info.cardMin + '.' : '.') + ' Set a passcode when you tip, then open your fan zone.';
+  // cards
+  const have = Object.keys(owned).filter(k => owned[k] > 0).length;
+  $('cinfo').textContent = 'Collected ' + have + ' of ' + (info.cards || []).length + '. Battle the boss: it costs ' + info.battleCost + ' points and a win pays ' + info.battleReward + '.';
+  $('deck').textContent = '';
+  (info.cards || []).forEach(c => {
+    const n = owned[c.id] || 0, d = document.createElement('div'); d.className = 'gc ' + c.rarity + (n ? '' : ' locked'); d.style.setProperty('--c', c.color);
+    const art = document.createElement('div'); art.className = 'art';
+    if (c.art) { const i = document.createElement('img'); i.src = c.art; i.alt = c.name; i.referrerPolicy = 'no-referrer'; art.appendChild(i); } else art.textContent = n ? c.emoji : '❔';
+    const nm = document.createElement('b'); nm.textContent = n ? c.name : '???'; const r = document.createElement('small'); r.textContent = c.rarity;
+    d.append(art, nm, r);
+    if (n) { const cnt = document.createElement('span'); cnt.className = 'n'; cnt.textContent = '×' + n; d.appendChild(cnt);
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'alt sm'; b.textContent = '⚔️ Battle'; b.onclick = () => battle(c.id); d.appendChild(b); }
+    $('deck').appendChild(d);
+  });
+  // redeems
+  $('rl').textContent = '';
+  (info.redeems || []).forEach(r => { const b = document.createElement('button'); b.type = 'button'; b.className = 'opt'; b.textContent = r.title + ' · ' + r.cost + ' points';
+    b.onclick = async () => { const d = await post('/api/redeem/' + slug, { ...cred(), id: r.id }); say(d.error || 'Done! You have ' + d.points + ' points left.', !d.error); }; $('rl').appendChild(b); });
+  // prediction
+  const pr = info.pred; $('pd').hidden = !pr; $('nopred').hidden = !!pr; if (!pr) return;
+  $('pt').textContent = pr.q + (pr.state === 'locked' ? ' (bets locked)' : pr.state === 'done' ? (pr.win >= 0 ? ' (winner: ' + pr.options[pr.win].t + ')' : ' (cancelled)') : '');
+  $('pl').textContent = '';
+  pr.options.forEach((o, i) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'opt'; b.disabled = pr.state !== 'open'; b.textContent = o.t + ' · ' + o.pool + ' points bet';
+    b.onclick = async () => { const d = await post('/api/bet/' + slug, { ...cred(), i, amount: +$('pa').value }); say(d.error || 'Bet placed. You have ' + d.points + ' points left.', !d.error); if (d.ok) refresh(); }; $('pl').appendChild(b); });
+}
+async function battle(cardId) {
+  const d = await post('/api/battle/' + slug, { ...cred(), cardId });
+  say(d.error || (d.won ? '🏆 You won! Your ' + d.mine + ' beat the boss’s ' + d.boss + '. You have ' + d.points + ' points.' : '💥 You lost. Your ' + d.mine + ' lost to the boss’s ' + d.boss + '. You have ' + d.points + ' points.'), !d.error && d.won);
+}
+function refresh() { fetch('/api/public/' + slug).then(r => r.json()).then(d => { info = d; if (!$('zone').hidden) renderFan(); }); }
+
 fetch('/api/public/' + slug).then(r => r.json()).then(d => {
-  info = d; if (!d.name) { $('e').textContent = 'Creator not found.'; return; } renderFan();
-  $('h').textContent = 'Tip ' + d.name; $('vn').textContent = 'Media share starts at $' + d.mediaMin + '.';
-  if (d.poll && d.poll.open) { $('poll').hidden = false; $('pq').textContent = d.poll.q; d.poll.options.forEach((o, i) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = o.t; b.onclick = async () => { const r = await fetch('/api/vote/' + slug, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ i }) }); const j = await r.json(); $('po').textContent = j.ok ? 'Thanks for voting!' : j.error; }; $('po').appendChild(b); }); }
+  info = d; if (!d.name) { $('e').textContent = 'Creator not found.'; return; }
+  $('h').textContent = 'Tip ' + d.name; $('av').textContent = Array.from(d.name)[0].toUpperCase(); document.title = 'Tip ' + d.name;
+  $('vn').textContent = 'Media share starts at $' + d.mediaMin + '.';
+  if (d.pointsPerUsd > 0) { $('fan').hidden = false; $('fi').textContent = 'Loading…'; renderFan(0); }
+  if (d.poll && d.poll.open) { $('poll').hidden = false; $('pq').textContent = d.poll.q; d.poll.options.forEach((o, i) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'opt'; b.textContent = o.t; b.onclick = async () => { const j = await post('/api/vote/' + slug, { i }); $('po').textContent = j.ok ? 'Thanks for voting!' : j.error; }; $('po').appendChild(b); }); }
 });
 async function go(ev) {
   ev.preventDefault();
